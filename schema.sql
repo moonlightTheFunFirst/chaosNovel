@@ -28,4 +28,8 @@ CREATE TABLE IF NOT EXISTS creations (
  payload TEXT NOT NULL, novel_id TEXT NOT NULL,
  PRIMARY KEY(participant_id, request_key)
 );
+CREATE TABLE IF NOT EXISTS creation_limits (
+ participant_id TEXT PRIMARY KEY REFERENCES participants(id),
+ next_allowed_at INTEGER NOT NULL
+);
 PRAGMA user_version = 3;

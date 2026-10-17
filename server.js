@@ -74,7 +74,10 @@ export function createApp(
       let result;
       const match = url.pathname.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
       if (url.pathname === "/api/session" && req.method === "GET")
-        result = { isAdmin: adminMode };
+        result = {
+          isAdmin: adminMode,
+          creation: store.creationStatus(participant, adminMode),
+        };
       else if (url.pathname === "/api/novels" && req.method === "GET")
         result = store.list();
       else if (url.pathname === "/api/novels" && req.method === "POST")
@@ -107,6 +110,7 @@ export function createApp(
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(
         JSON.stringify({
+          creation: error.creation,
           error: error.status
             ? error.message
             : "保存に失敗しました。同じ原稿を再送できます。",

@@ -402,3 +402,52 @@ body.creation-writing {
   flex-shrink: 0;
   white-space: nowrap;
 }
+.intro-rules {
+  margin: 0 0 64px;
+  padding: 28px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.intro-rules h2 {
+  font-size: 20px;
+}
+.intro-lead {
+  font-size: 22px;
+}
+.intro-rules ol {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 32px;
+}
+.intro-rules h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+  line-height: 1.8;
+}
+.intro-rules li p {
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.9;
+  color: var(--muted);
+}
+.admin-rule-note {
+  padding: 12px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.creation-writing .creation-editor {
+  grid-template-rows: 40px minmax(0, 1fr) auto auto auto auto;
+}
+@media (max-width: 650px) {
+  .intro-rules {
+    padding: 20px 0;
+  }
+  .intro-rules ol {
+    grid-template-columns: 1fr;
+  }
+  .creation-writing #manuscript {
+    height: max(100px, calc(100dvh - 390px));
+  }
+}

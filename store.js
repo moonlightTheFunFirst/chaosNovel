@@ -10,7 +10,8 @@ export class AppError extends Error {
   }
 }
 export class Store {
-  constructor(path) {
+  constructor(path, { now = Date.now } = {}) {
+    this.now = now;
     this.db = new DatabaseSync(path);
     const version = this.db.prepare("PRAGMA user_version").get().user_version;
     if (version === 1)
@@ -32,6 +33,19 @@ export class Store {
     );
   }
 
+  creationStatus(participant, isAdmin = false) {
+    const serverTime = this.now();
+    const next = this.db
+      .prepare(
+        "SELECT next_allowed_at FROM creation_limits WHERE participant_id=?",
+      )
+      .get(participant)?.next_allowed_at;
+    return {
+      canCreate: isAdmin || !next || serverTime >= next,
+      nextCreationAt: isAdmin || !next ? null : new Date(next).toISOString(),
+      serverTime,
+    };
+  }
   publish(title, capacity, participant, key, text, isAdmin = false) {
     if (
       typeof key !== "string" ||
@@ -53,6 +67,15 @@ export class Store {
         this.db.exec("COMMIT");
         return { id: prior.novel_id };
       }
+      const permission = this.creationStatus(participant, isAdmin);
+      if (!permission.canCreate) {
+        const error = new AppError(
+          "新しい本は7日間に一冊まで公開できます。下書きは保存されています。",
+          429,
+        );
+        error.creation = permission;
+        throw error;
+      }
       const { id } = this.create(title, capacity);
       this.post(id, participant, key, text, isAdmin, true);
       this.db
@@ -61,6 +84,12 @@ export class Store {
       this.db
         .prepare("INSERT INTO creations VALUES (?,?,?,?)")
         .run(participant, key, payload, id);
+      if (!isAdmin)
+        this.db
+          .prepare(
+            "INSERT INTO creation_limits VALUES (?,?) ON CONFLICT(participant_id) DO UPDATE SET next_allowed_at=excluded.next_allowed_at",
+          )
+          .run(participant, this.now() + 7 * 24 * 60 * 60 * 1000);
       this.db.exec("COMMIT");
       return { id };
     } catch (error) {

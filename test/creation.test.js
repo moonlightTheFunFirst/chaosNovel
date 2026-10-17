@@ -32,10 +32,11 @@ test("publication is atomic, idempotent, and consumes regular participation", ()
     s.post(result.id, p, postKey, "続", true);
     assert.equal(s.get(result.id, p).updated_at, updated);
     assert.equal(
-      s.publish("長い", 4000, p, randomUUID(), "👩🏽‍💻".repeat(400)).id.length > 0,
+      s.publish("長い", 4000, s.participant(), randomUUID(), "👩🏽‍💻".repeat(400))
+        .id.length > 0,
       true,
     );
-    assert.ok(s.publish("空白", 4000, p, randomUUID(), " "));
+    assert.ok(s.publish("空白", 4000, s.participant(), randomUUID(), " "));
   } finally {
     s.close();
   }

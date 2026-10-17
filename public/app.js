@@ -1,3 +1,4 @@
+import { showRules } from "./rules.js";
 import { openCreation } from "./creation.js";
 import { formatDate, sortBooks } from "./book-meta.js";
 import { openReadingRoom } from "./reading-room.js";
@@ -21,6 +22,7 @@ async function api(path, body, method = body ? "POST" : "GET") {
   if (!response.ok) {
     const error = new Error(data.error);
     error.status = response.status;
+    error.creation = data.creation;
     throw error;
   }
   return data;
@@ -101,6 +103,7 @@ function deleteBook(book) {
 async function shelf() {
   app.innerHTML =
     '<section class="hero"><div><div class="eyebrow">A STORY WITHOUT A PLAN</div><h1>一度きりの一節を。<br>予想できない一冊に。</h1><p>知らない誰かの続きに、あなたの言葉を。<br>結末も、つながりも、気にしなくていい。</p></div><div class="hero-mark">見た目は小説。<br>中身は、カオス。</div></section><div class="toolbar"><h2>みんなの本棚</h2><div class="actions" id="shelf-actions"></div></div><div class="shelf" id="shelf"></div>';
+  showRules(app, el, isAdmin);
   const actions = document.querySelector("#shelf-actions");
   const filter = el("select");
   filter.setAttribute("aria-label", "本の状態");
