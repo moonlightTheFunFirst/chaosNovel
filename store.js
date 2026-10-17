@@ -20,9 +20,53 @@ export class Store {
           "utf8",
         ),
       );
+    if (version === 1 || version === 2)
+      this.db.exec(
+        readFileSync(
+          new URL("./migrations/003-creation.sql", import.meta.url),
+          "utf8",
+        ),
+      );
     this.db.exec(
       readFileSync(new URL("./schema.sql", import.meta.url), "utf8"),
     );
+  }
+
+  publish(title, capacity, participant, key, text, isAdmin = false) {
+    if (
+      typeof key !== "string" ||
+      !/^[a-zA-Z0-9-]{16,100}$/.test(key) ||
+      typeof text !== "string"
+    )
+      throw new AppError("投稿形式が正しくありません。");
+    const payload = JSON.stringify([title, capacity, normalize(text)]);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const prior = this.db
+        .prepare(
+          "SELECT * FROM creations WHERE participant_id=? AND request_key=?",
+        )
+        .get(participant, key);
+      if (prior) {
+        if (prior.payload !== payload)
+          throw new AppError("同じ送信キーで公開内容を変更できません。", 409);
+        this.db.exec("COMMIT");
+        return { id: prior.novel_id };
+      }
+      const { id } = this.create(title, capacity);
+      this.post(id, participant, key, text, isAdmin, true);
+      this.db
+        .prepare("UPDATE novels SET created_at=updated_at WHERE id=?")
+        .run(id);
+      this.db
+        .prepare("INSERT INTO creations VALUES (?,?,?,?)")
+        .run(participant, key, payload, id);
+      this.db.exec("COMMIT");
+      return { id };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
   participant(cookie) {
     if (
@@ -47,9 +91,15 @@ export class Store {
     const id = randomUUID();
     this.db
       .prepare(
-        "INSERT INTO novels(id,title,capacity,created_at) VALUES (?,?,?,?)",
+        "INSERT INTO novels(id,title,capacity,created_at,updated_at) VALUES (?,?,?,?,?)",
       )
-      .run(id, normalize(title), capacity, new Date().toISOString());
+      .run(
+        id,
+        normalize(title),
+        capacity,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
     return { id };
   }
   list() {
@@ -90,7 +140,7 @@ export class Store {
       throw error;
     }
   }
-  post(id, participant, key, text, isAdmin = false) {
+  post(id, participant, key, text, isAdmin = false, nested = false) {
     if (
       typeof key !== "string" ||
       !/^[a-zA-Z0-9-]{16,100}$/.test(key) ||
@@ -98,7 +148,7 @@ export class Store {
     )
       throw new AppError("投稿形式が正しくありません。");
     text = normalize(text);
-    this.db.exec("BEGIN IMMEDIATE");
+    this.db.exec(nested ? "SAVEPOINT posting" : "BEGIN IMMEDIATE");
     try {
       const previous = this.db
         .prepare(
@@ -108,7 +158,7 @@ export class Store {
       if (previous) {
         if (previous.original !== text)
           throw new AppError("同じ送信キーで原稿を変更できません。", 409);
-        this.db.exec("COMMIT");
+        this.db.exec(nested ? "RELEASE posting" : "COMMIT");
         return JSON.parse(previous.result);
       }
       const novel = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
@@ -159,12 +209,14 @@ export class Store {
           isAdmin ? 1 : 0,
         );
       this.db
-        .prepare("UPDATE novels SET count=?,revision=? WHERE id=?")
-        .run(result.total, result.sequence, id);
-      this.db.exec("COMMIT");
+        .prepare("UPDATE novels SET count=?,revision=?,updated_at=? WHERE id=?")
+        .run(result.total, result.sequence, new Date().toISOString(), id);
+      this.db.exec(nested ? "RELEASE posting" : "COMMIT");
       return result;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      this.db.exec(
+        nested ? "ROLLBACK TO posting; RELEASE posting" : "ROLLBACK",
+      );
       throw error;
     }
   }

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS novels (
  capacity INTEGER NOT NULL CHECK(capacity IN (4000,12000,40000)),
  count INTEGER NOT NULL DEFAULT 0 CHECK(count >= 0 AND count <= capacity),
  revision INTEGER NOT NULL DEFAULT 0,
- created_at TEXT NOT NULL
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS posts (
  novel_id TEXT NOT NULL REFERENCES novels(id),
@@ -23,4 +23,9 @@ CREATE TABLE IF NOT EXISTS posts (
  UNIQUE(novel_id, participant_id, request_key)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_regular_post ON posts(novel_id, participant_id) WHERE is_admin = 0;
-PRAGMA user_version = 2;
+CREATE TABLE IF NOT EXISTS creations (
+ participant_id TEXT NOT NULL, request_key TEXT NOT NULL,
+ payload TEXT NOT NULL, novel_id TEXT NOT NULL,
+ PRIMARY KEY(participant_id, request_key)
+);
+PRAGMA user_version = 3;

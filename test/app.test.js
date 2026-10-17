@@ -206,6 +206,8 @@ test("HTTP independent cookies, repeat request, invalid input and origin", async
     });
   const created = await request("/api/novels", {
     title: "共有",
+    text: "始",
+    key: randomUUID(),
     capacity: 4000,
   });
   const { id } = await created.json();
@@ -237,6 +239,6 @@ test("HTTP independent cookies, repeat request, invalid input and origin", async
   const book = await (
     await fetch(base + `/api/novels/${id}`, { headers: { cookie } })
   ).json();
-  assert.equal(book.count, 2);
+  assert.equal(book.count, 3);
   assert.ok(book.own);
 });

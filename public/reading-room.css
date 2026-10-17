@@ -321,3 +321,84 @@ body.reading-room {
     gap: 8px;
   }
 }
+.creation-editor {
+  text-align: center;
+}
+.creation-editor[hidden],
+#new-book-form[hidden] {
+  display: none;
+}
+.creation-editor .novel-sheet {
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.creation-editor #manuscript {
+  position: static;
+  display: block;
+  width: min(640px, calc(100vw - 140px));
+  height: min(65dvh, 680px);
+  min-height: 240px;
+  font-size: 20px;
+  line-height: 2;
+}
+.creation-editor .actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.creation-preview {
+  writing-mode: vertical-rl;
+  white-space: pre-wrap;
+  height: min(55dvh, 500px);
+  max-width: 100%;
+  overflow: auto;
+  line-height: 2;
+}
+body.creation-writing {
+  overflow: hidden;
+}
+.creation-writing > header,
+.creation-writing > footer,
+.creation-writing .book-heading,
+.creation-writing #app > .back {
+  display: none;
+}
+.creation-writing .creation-editor {
+  position: fixed;
+  inset: 0;
+  padding: 12px 24px;
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+}
+.creation-title {
+  font-size: 14px;
+  margin: 0;
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.creation-writing .novel-sheet {
+  justify-self: center;
+  align-self: center;
+}
+.creation-writing #manuscript {
+  width: min(640px, calc(100vw - 130px));
+  height: max(120px, min(65dvh, calc(100dvh - 310px)));
+  min-height: 0;
+}
+.creation-writing #app > .message {
+  position: fixed;
+  bottom: 0;
+  left: 12px;
+  z-index: 2;
+  background: var(--paper);
+}
+.creation-writing .creation-editor > p {
+  margin: 0;
+}
+.toolbar h2 {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

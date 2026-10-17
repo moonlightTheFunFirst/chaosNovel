@@ -78,7 +78,14 @@ export function createApp(
       else if (url.pathname === "/api/novels" && req.method === "GET")
         result = store.list();
       else if (url.pathname === "/api/novels" && req.method === "POST")
-        result = store.create(body.title, body.capacity);
+        result = store.publish(
+          body.title,
+          body.capacity,
+          participant,
+          body.key,
+          body.text,
+          adminMode,
+        );
       else if (match && !match[2] && req.method === "GET")
         result = store.get(match[1], participant);
       else if (match && !match[2] && req.method === "DELETE")

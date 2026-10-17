@@ -1,3 +1,4 @@
+import { formatDate } from "./book-meta.js";
 import { count, split, normalize } from "./text.js";
 import {
   PagedText,
@@ -51,6 +52,8 @@ export async function openReadingRoom(id, helpers) {
   const next = document.querySelector(".turn-next"),
     previous = document.querySelector(".turn-previous");
   const menu = document.querySelector("#book-menu-items");
+  const dates = el("p", "", "meta");
+  menu.append(dates);
   if (isAdmin) {
     menu.append(
       el("p", "管理者モード", "badge"),
@@ -198,6 +201,11 @@ export async function openReadingRoom(id, helpers) {
               : "最後のページまで進むと、執筆できます。";
   }
   function update() {
+    dates.textContent =
+      "作成 " +
+      formatDate(book.created_at) +
+      " ／ 更新 " +
+      formatDate(book.updated_at);
     document.querySelector("#book-meta").textContent =
       `${book.count.toLocaleString()} / ${book.capacity.toLocaleString()}字 ・ ${book.count === book.capacity ? "完結" : "執筆中"}`;
     updateNavigation();

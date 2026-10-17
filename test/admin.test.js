@@ -44,7 +44,8 @@ test("v1 migration preserves posts, supports admin repetition and atomic deletio
       " UNIQUE(novel_id, participant_id),\n UNIQUE(novel_id, participant_id, request_key)",
     )
     .replace(/CREATE UNIQUE INDEX IF NOT EXISTS one_regular_post[^;]+;/, "")
-    .replace("user_version = 2", "user_version = 1");
+    .replace(", updated_at TEXT NOT NULL", "")
+    .replace("user_version = 3", "user_version = 1");
   old.exec(schema);
   const result = {
     original: "あ",
@@ -67,6 +68,7 @@ test("v1 migration preserves posts, supports admin repetition and atomic deletio
   const store = new Store(path);
   try {
     assert.equal(store.get("book", "person").count, 1);
+    assert.equal(store.get("book", "person").updated_at, "2026-10-17");
     assert.deepEqual(store.post("book", "person", key, "あ", true), result);
     assert.throws(
       () => store.post("book", "person", randomUUID(), "い"),
@@ -118,7 +120,12 @@ for (const adminMode of [true, false])
         body: body ? JSON.stringify(body) : undefined,
       });
     const { id } = await (
-      await call("/api/novels", { title: "管理者テスト", capacity: 4000 })
+      await call("/api/novels", {
+        title: "管理者テスト",
+        capacity: 4000,
+        text: "始",
+        key: randomUUID(),
+      })
     ).json();
     const post = () =>
       call(`/api/novels/${id}/posts`, {
@@ -126,7 +133,7 @@ for (const adminMode of [true, false])
         text: "あ",
         isAdmin: true,
       });
-    assert.equal((await post()).status, 200);
+    assert.equal((await post()).status, adminMode ? 200 : 409);
     assert.equal((await post()).status, adminMode ? 200 : 409);
     assert.equal(
       (
