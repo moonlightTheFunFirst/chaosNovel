@@ -1,3 +1,4 @@
+import { adminLogin, clientAddressResolver } from "./admin-login.js";
 import { cookieIdentity } from "./identity.js";
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync } from "node:fs";
@@ -9,12 +10,33 @@ export function createApp(
   store,
   {
     adminMode,
-    cookieSecret,
+    cookieSecret = process.env.COOKIE_SECRET,
     publicOrigin = process.env.PUBLIC_ORIGIN,
-    adminPassword = process.env.ADMIN_PASSWORD || "1234",
+    adminPassword = process.env.ADMIN_PASSWORD,
+    now = Date.now,
+    warn = console.warn,
+    delay,
+    trustProxy = process.env.TRUST_PROXY === "1",
+    trustProxyHops = process.env.TRUST_PROXY_HOPS ?? 1,
+    cookieSecure = process.env.COOKIE_SECURE === "1",
   } = {},
 ) {
-  const identity = cookieIdentity(store, cookieSecret);
+  const clientAddress = clientAddressResolver(trustProxy, trustProxyHops);
+  if ((publicOrigin || cookieSecure) && cookieSecret === undefined)
+    warn(
+      "COOKIE_SECRETが未設定です。公開時は環境変数で渡し、DBバックアップとは別に管理してください。",
+    );
+  const login = adminLogin({
+    password: adminPassword,
+    production: !!publicOrigin || cookieSecure,
+    warn,
+    delay,
+    now,
+  });
+  const identity = cookieIdentity(store, cookieSecret, {
+    password: adminPassword,
+    now,
+  });
   return createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
@@ -67,8 +89,7 @@ export function createApp(
       const person = identity.participant(cookies.participant);
       const participant = person.id;
       const cookieAttrs =
-        "; HttpOnly; SameSite=Lax; Path=/" +
-        (process.env.COOKIE_SECURE === "1" ? "; Secure" : "");
+        "; HttpOnly; SameSite=Lax; Path=/" + (cookieSecure ? "; Secure" : "");
       const responseCookies = [];
       if (person.token !== cookies.participant)
         responseCookies.push(
@@ -96,8 +117,7 @@ export function createApp(
       let result;
       const match = url.pathname.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
       if (url.pathname === "/api/admin" && req.method === "POST") {
-        if (body.password !== adminPassword)
-          throw new AppError("パスワードが違います。", 403);
+        await login(clientAddress(req), body.password);
         responseCookies.push(
           "admin=" +
             identity.adminToken(participant) +
@@ -107,6 +127,7 @@ export function createApp(
         res.setHeader("Set-Cookie", responseCookies);
         result = { isAdmin: true };
       } else if (url.pathname === "/api/admin" && req.method === "DELETE") {
+        if (isAdmin) identity.revokeAdmin(participant);
         responseCookies.push("admin=" + cookieAttrs + "; Max-Age=0");
         res.setHeader("Set-Cookie", responseCookies);
         result = { isAdmin: false };
@@ -116,7 +137,7 @@ export function createApp(
           creation: store.creationStatus(participant, isAdmin),
         };
       else if (url.pathname === "/api/novels" && req.method === "GET")
-        result = store.list(Object.fromEntries(url.searchParams));
+        result = store.listPage(Object.fromEntries(url.searchParams));
       else if (url.pathname === "/api/novels" && req.method === "POST")
         result = store.publish(
           body.title,
@@ -142,7 +163,7 @@ export function createApp(
           participant,
           body.key,
           body.text,
-          adminMode,
+          isAdmin,
         );
       else throw new AppError("Not found", 404);
       res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -150,6 +171,8 @@ export function createApp(
     } catch (error) {
       if (!error.status) console.error(error);
       res.statusCode = error.status || 500;
+      if (error.retryAfter)
+        res.setHeader("Retry-After", String(error.retryAfter));
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(
         JSON.stringify({

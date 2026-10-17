@@ -138,46 +138,87 @@ export class Store {
       );
     return { id };
   }
-  list({
+  list(options = {}) {
+    return this.listPage(options).books;
+  }
+  listPage({
     limit = 30,
-    offset = 0,
+    cursor = null,
     sort = "created_at:desc",
     filter = "all",
+    offset,
   } = {}) {
     limit = Number(limit);
-    offset = Number(offset);
-    if (
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      !Number.isInteger(offset) ||
-      offset < 0
-    )
+    if (!Number.isInteger(limit) || limit < 1 || offset !== undefined)
       throw new AppError("不正なページ指定です。");
     limit = Math.min(limit, 100);
-    const [field, direction] = sort.split(":");
+    if (typeof sort !== "string") throw new AppError("不正な並び順です。");
+    const [field, direction, ...extra] = sort.split(":");
     if (
+      extra.length ||
       !["title", "created_at", "updated_at"].includes(field) ||
       !["asc", "desc"].includes(direction) ||
       !["all", "writing", "complete"].includes(filter)
     )
       throw new AppError("不正な並び順です。");
-    const where =
-      filter === "writing"
-        ? "WHERE count<capacity"
-        : filter === "complete"
-          ? "WHERE count=capacity"
-          : "";
-    return this.db
+    const conditions = [],
+      params = [];
+    if (filter !== "all")
+      conditions.push(
+        filter === "writing" ? "count<capacity" : "count=capacity",
+      );
+    if (cursor) {
+      let data;
+      try {
+        if (
+          typeof cursor !== "string" ||
+          cursor.length > 32768 ||
+          !/^[A-Za-z0-9_-]+$/.test(cursor)
+        )
+          throw new Error();
+        data = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+        if (
+          data.sort !== sort ||
+          data.filter !== filter ||
+          typeof data.value !== "string" ||
+          typeof data.id !== "string" ||
+          data.id.length > 100
+        )
+          throw new Error();
+      } catch {
+        throw new AppError("不正なカーソルです。");
+      }
+      conditions.push(
+        "(" +
+          field +
+          (direction === "asc" ? ">" : "<") +
+          "? OR (" +
+          field +
+          "=? AND id>?))",
+      );
+      params.push(data.value, data.value, data.id);
+    }
+    const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
+    const rows = this.db
       .prepare(
-        "SELECT * FROM novels " +
+        "SELECT * FROM novels" +
           where +
           " ORDER BY " +
           field +
           " " +
           direction +
-          ", id ASC LIMIT ? OFFSET ?",
+          ", id ASC LIMIT ?",
       )
-      .all(limit, offset);
+      .all(...params, limit + 1);
+    const books = rows.slice(0, limit),
+      last = books.at(-1);
+    const nextCursor =
+      rows.length > limit
+        ? Buffer.from(
+            JSON.stringify({ sort, filter, value: last[field], id: last.id }),
+          ).toString("base64url")
+        : null;
+    return { books, nextCursor };
   }
   get(id, participant, after = null) {
     if (after !== null && (!Number.isSafeInteger(after) || after < 0))
@@ -188,9 +229,9 @@ export class Store {
       if (!novel) throw new AppError("この本は見つかりません。", 404);
       const own = this.db
         .prepare(
-          "SELECT result FROM posts WHERE novel_id=? AND participant_id=? ORDER BY sequence DESC LIMIT 1",
+          "SELECT result FROM posts WHERE novel_id=? AND participant_id=? AND sequence>? ORDER BY sequence DESC LIMIT 1",
         )
-        .get(id, participant);
+        .get(id, participant, after ?? -1);
       return {
         ...novel,
         after,
@@ -199,7 +240,11 @@ export class Store {
             "SELECT sequence,published,count FROM posts WHERE novel_id=? AND sequence>? ORDER BY sequence",
           )
           .all(id, after ?? -1),
-        own: own ? JSON.parse(own.result) : null,
+        ...(own
+          ? { own: JSON.parse(own.result) }
+          : after === null
+            ? { own: null }
+            : {}),
       };
     } finally {
       this.db.exec("RELEASE reading");

@@ -33,10 +33,7 @@ test("A: data limits reject pathological graphemes; 400 normal emoji/ZWJ/combini
     }
     assert.equal(inspectInput("a".repeat(POST_UNITS + 1)).count, null);
     assert.equal(inspectInput("a".repeat(401)).valid, false);
-    assert.equal(
-      inspectInput("a" + "\u0301".repeat(TITLE_UNITS - 1), true).valid,
-      true,
-    );
+    assert.equal(inspectInput("a" + "\u0301".repeat(31), true).valid, true);
   } finally {
     s.close();
   }
@@ -128,7 +125,11 @@ test("E: bounded shelf pages and server sorting/filtering", () => {
     assert.equal(s.list().length, 30);
     assert.equal(s.list({ limit: 1000 }).length, 100);
     assert.equal(
-      s.list({ sort: "title:asc", offset: 30, limit: 1 })[0].title,
+      s.list({
+        sort: "title:asc",
+        cursor: s.listPage({ sort: "title:asc", limit: 30 }).nextCursor,
+        limit: 1,
+      })[0].title,
       "030",
     );
     assert.equal(s.list({ filter: "complete" }).length, 0);
@@ -159,7 +160,9 @@ async function fixture(t, options = {}) {
   return { store, server, port, base, call };
 }
 test("C: anonymous reads do not insert; signed and legacy cookies register only on successful write", async (t) => {
-  const { store, call } = await fixture(t, { cookieSecret: "test-secret" });
+  const { store, call } = await fixture(t, {
+    cookieSecret: "test-secret".repeat(4),
+  });
   for (let i = 0; i < 200; i++)
     assert.equal((await call("/api/novels")).status, 200);
   assert.equal(
@@ -282,7 +285,7 @@ test("D: PUBLIC_ORIGIN restricts even local Host and accepts configured proxy Ho
   assert.equal(await send("books.example"), 200);
 });
 test("admin: guest by default, password elevation is signed and bound to participant, logout", async (t) => {
-  const { call } = await fixture(t);
+  const { call } = await fixture(t, { adminPassword: "test-password-long" });
   const session = await call("/api/session");
   const cookie = session.headers.get("set-cookie").split(";")[0];
   assert.equal((await session.json()).isAdmin, false);
@@ -290,7 +293,11 @@ test("admin: guest by default, password elevation is signed and bound to partici
     (await call("/api/admin", { password: "wrong" }, { cookie })).status,
     403,
   );
-  const login = await call("/api/admin", { password: "1234" }, { cookie });
+  const login = await call(
+    "/api/admin",
+    { password: "test-password-long" },
+    { cookie },
+  );
   assert.equal(login.status, 200);
   const admin = login.headers.get("set-cookie").split(";")[0],
     combined = cookie + "; " + admin;
@@ -330,7 +337,10 @@ test("HTTP delta endpoint and paged list parameters", async (t) => {
     0,
   );
   assert.equal((await call("/api/novels/" + id + "?after=no")).status, 400);
-  assert.equal((await (await call("/api/novels?limit=1")).json()).length, 1);
+  assert.equal(
+    (await (await call("/api/novels?limit=1")).json()).books.length,
+    1,
+  );
   assert.equal((await call("/api/novels?offset=-1")).status, 400);
 });
 test("forged Host and matching malicious Origin cannot authorize writes", async (t) => {
@@ -371,7 +381,7 @@ test("forged Host and matching malicious Origin cannot authorize writes", async 
 test("non-ASCII forged signatures are rejected without throwing", () => {
   const store = new Store(":memory:");
   try {
-    const identity = cookieIdentity(store, "test");
+    const identity = cookieIdentity(store, "test".repeat(8));
     assert.ok(
       identity.participant("p:" + randomUUID() + "." + "é".repeat(43)).id,
     );

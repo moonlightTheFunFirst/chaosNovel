@@ -11,7 +11,12 @@ export function mergeDelta(base, delta) {
     total += p.count;
   });
   if (total !== delta.count) throw new Error("count mismatch");
-  return { ...base, ...delta, posts: [...base.posts, ...delta.posts] };
+  return {
+    ...base,
+    ...delta,
+    own: Object.hasOwn(delta, "own") ? delta.own : base.own,
+    posts: [...base.posts, ...delta.posts],
+  };
 }
 export function visiblePolling(
   doc,

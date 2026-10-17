@@ -1,6 +1,6 @@
 import { showRules } from "./rules.js";
 import { openCreation } from "./creation.js";
-import { formatDate, sortBooks } from "./book-meta.js";
+import { formatDate } from "./book-meta.js";
 import { openReadingRoom } from "./reading-room.js";
 const app = document.querySelector("#app");
 const labels = { 4000: "短編", 12000: "中編", 40000: "長編" };
@@ -123,8 +123,8 @@ async function shelf() {
     ["created_at:asc", "作成日時：古い順"],
     ["updated_at:desc", "更新日時：新しい順"],
     ["updated_at:asc", "更新日時：古い順"],
-    ["title:asc", "本の名前：昇順"],
-    ["title:desc", "本の名前：降順"],
+    ["title:asc", "本の名前：コードポイント昇順"],
+    ["title:desc", "本の名前：コードポイント降順"],
   ]) {
     const option = el("option", label);
     option.value = value;
@@ -143,27 +143,32 @@ async function shelf() {
   );
   app.append(message);
   let books = [],
-    generation = 0;
+    generation = 0,
+    cursor = null;
   const more = button("さらに読み込む", () => load(false));
   app.append(more);
   async function load(reset) {
     const ticket = ++generation;
-    if (reset) books = [];
+    if (reset) {
+      books = [];
+      cursor = null;
+    }
     more.disabled = true;
     try {
       const batch = await api(
         "/novels?" +
           new URLSearchParams({
             limit: 30,
-            offset: books.length,
+            ...(cursor ? { cursor } : {}),
             sort: sort.value,
             filter: filter.value,
           }),
       );
       if (ticket !== generation || !app.contains(more)) return;
       const seen = new Set(books.map((b) => b.id));
-      books.push(...batch.filter((b) => !seen.has(b.id)));
-      more.hidden = batch.length < 30;
+      books.push(...batch.books.filter((b) => !seen.has(b.id)));
+      cursor = batch.nextCursor;
+      more.hidden = !cursor;
       render();
     } catch (e) {
       message.textContent = e.message;
