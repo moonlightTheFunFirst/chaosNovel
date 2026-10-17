@@ -3,14 +3,21 @@ export function showRules(app, el, isAdmin) {
   section.setAttribute("aria-labelledby", "rules-heading");
   const heading = el("h2", "カオス小説とは");
   heading.id = "rules-heading";
-  section.append(
+  // Phrase spans keep the lead from breaking in the middle of a word.
+  const lead = el("p", undefined, "intro-lead");
+  lead.append(el("span", "みんなの一節が、"), el("span", "一冊の小説になる。"));
+  const intro = el("div", undefined, "intro-heading");
+  intro.append(
+    el("div", "HOW IT WORKS", "eyebrow"),
     heading,
-    el("p", "みんなの一節が、一冊の小説になる。", "intro-lead"),
+    lead,
     el(
       "p",
       "前の文章を読み、好きな続きを書く。つながっていても、いなくても。予想できない物語を、一緒につくる場所です。",
+      "intro-text",
     ),
   );
+  section.append(intro);
   const rules = [
     [
       "一冊につき、あなたが書けるのは一回だけ。",
@@ -41,15 +48,20 @@ export function showRules(app, el, isAdmin) {
       "公開してから7日後に、次の本をつくれます。その間も、ほかの本への参加や下書きはできます。",
     ],
   ];
-  const list = el("ol");
+  const numerals = ["一", "二", "三", "四", "五", "六", "七"];
+  const list = el("ol", undefined, "intro-rule-list");
   rules.forEach(([title, text], i) => {
     const li = el("li");
-    li.append(el("h3", "ルール" + (i + 1) + "：" + title), el("p", text));
+    const numeral = el("span", numerals[i], "rule-numeral");
+    numeral.setAttribute("aria-hidden", "true");
+    const body = el("div");
+    body.append(el("h3", title), el("p", text));
+    li.append(numeral, body);
     list.append(li);
   });
   section.append(list);
   if (isAdmin)
-    section.append(
+    intro.append(
       el(
         "p",
         "現在は管理者モードのため、投稿・作成回数の制限はありません。",

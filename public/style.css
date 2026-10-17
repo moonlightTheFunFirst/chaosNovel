@@ -23,12 +23,47 @@
   border-color: var(--line);
   font-size: 12px;
 }
+.header-side {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.admin-status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.admin-status:has(.admin-badge) {
+  padding-left: 28px;
+  border-left: 1px solid var(--line);
+}
 .admin-badge {
   color: var(--red);
+  letter-spacing: 0.1em;
+}
+.admin-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  vertical-align: middle;
+}
+/* In the header the admin switch is a quiet text link, not a primary action. */
+.admin-status .admin-control {
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
   font-size: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  white-space: nowrap;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.admin-status .admin-control:hover {
+  border-bottom-color: currentColor;
 }
 .danger {
   color: var(--red);
@@ -63,6 +98,7 @@ a {
   text-decoration: none;
 }
 .brand {
+  white-space: nowrap;
   font-size: 25px;
   letter-spacing: 0.17em;
 }
@@ -104,6 +140,9 @@ p {
   justify-content: space-between;
   gap: 40px;
   padding: 40px 0 45px;
+}
+.hero h1 span {
+  display: inline-block;
 }
 .hero p {
   color: var(--muted);
@@ -356,6 +395,16 @@ dialog::backdrop {
   }
   .tagline {
     display: none;
+  }
+  .brand {
+    font-size: 21px;
+  }
+  .admin-status {
+    gap: 10px;
+  }
+  .admin-status:has(.admin-badge) {
+    padding-left: 0;
+    border-left: 0;
   }
   .hero {
     gap: 12px;

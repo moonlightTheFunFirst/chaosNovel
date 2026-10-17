@@ -102,7 +102,7 @@ function deleteBook(book) {
 }
 async function shelf() {
   app.innerHTML =
-    '<section class="hero"><div><div class="eyebrow">A STORY WITHOUT A PLAN</div><h1>一度きりの一節を。<br>予想できない一冊に。</h1><p>知らない誰かの続きに、あなたの言葉を。<br>結末も、つながりも、気にしなくていい。</p></div><div class="hero-mark">見た目は小説。<br>中身は、カオス。</div></section><div class="toolbar"><h2>みんなの本棚</h2><div class="actions" id="shelf-actions"></div></div><div class="shelf" id="shelf"></div>';
+    '<section class="hero"><div><div class="eyebrow">A STORY WITHOUT A PLAN</div><h1><span>一度きりの</span><span>一節を。</span><br><span>予想できない</span><span>一冊に。</span></h1><p>知らない誰かの続きに、あなたの言葉を。<br>結末も、つながりも、気にしなくていい。</p></div><div class="hero-mark">見た目は小説。<br>中身は、カオス。</div></section><div class="toolbar"><h2>みんなの本棚</h2><div class="actions" id="shelf-actions"></div></div><div class="shelf" id="shelf"></div>';
   showRules(app, el, isAdmin);
   const actions = document.querySelector("#shelf-actions");
   const filter = el("select");
@@ -291,12 +291,13 @@ async function start() {
           location.reload();
         }
       : adminDialog,
+    "admin-control",
   );
-  document.querySelector("header").append(adminControl);
+  const adminStatus = el("div", undefined, "admin-status");
+  if (isAdmin) adminStatus.append(el("span", "管理者モード", "admin-badge"));
+  adminStatus.append(adminControl);
+  document.querySelector(".header-side").append(adminStatus);
   if (isAdmin) {
-    document
-      .querySelector("header")
-      .append(el("span", "管理者モード", "admin-badge"));
     document.querySelector("footer").textContent =
       "管理者モード — 本の作成・繰り返し投稿・削除ができます。";
   }
