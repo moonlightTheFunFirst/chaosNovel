@@ -1,5 +1,5 @@
 import { formatDate } from "./book-meta.js";
-import { count } from "./text.js";
+import { count, inspectInput } from "./text.js";
 export function openCreation({
   api,
   el,
@@ -91,14 +91,15 @@ export function openCreation({
   );
   app.append(editor);
   function update() {
-    counter.textContent = count(text) + " / 400 字";
+    const input = inspectInput(text);
+    counter.textContent =
+      input.count === null ? input.error : input.count + " / 400 字";
     check.disabled =
       composing ||
       sending ||
       !!pending ||
       performance.now() < allowedAt ||
-      count(text) < 1 ||
-      count(text) > 400;
+      !input.valid;
     retry.hidden = !pending;
     retry.disabled = sending;
     title.disabled = length.disabled = draft.readOnly = !!pending || sending;
@@ -131,8 +132,8 @@ export function openCreation({
   };
   form.onsubmit = (e) => {
     e.preventDefault();
-    if (!title.value.trim() || count(title.value) > 100) {
-      status.textContent = "タイトルは1〜100字で入力してください。";
+    if (!inspectInput(title.value, true).valid) {
+      status.textContent = inspectInput(title.value, true).error;
       return;
     }
     save();

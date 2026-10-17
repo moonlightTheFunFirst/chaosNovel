@@ -1,3 +1,4 @@
+import { cookieIdentity } from "./identity.js";
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -6,8 +7,14 @@ import { Store, AppError } from "./store.js";
 
 export function createApp(
   store,
-  { adminMode = process.env.ADMIN_MODE !== "0" } = {},
+  {
+    adminMode,
+    cookieSecret,
+    publicOrigin = process.env.PUBLIC_ORIGIN,
+    adminPassword = process.env.ADMIN_PASSWORD || "1234",
+  } = {},
 ) {
+  const identity = cookieIdentity(store, cookieSecret);
   return createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
@@ -16,6 +23,25 @@ export function createApp(
       "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
     try {
+      const host = req.headers.host;
+      const port = req.socket.localPort;
+      const suffix = port === 80 ? "" : ":" + port;
+      const allowed = publicOrigin
+        ? [new URL(publicOrigin).host]
+        : ["localhost", "127.0.0.1", "[::1]"].map((h) => h + suffix);
+      if (!allowed.includes(host))
+        throw new AppError("許可されていないHostです。", 421);
+      if (["POST", "DELETE"].includes(req.method)) {
+        if (req.headers["sec-fetch-site"] === "cross-site")
+          throw new AppError("別のサイトからの送信はできません。", 403);
+        const expected = publicOrigin
+          ? new URL(publicOrigin).origin
+          : "http://" + host;
+        if (req.headers.origin && req.headers.origin !== expected)
+          throw new AppError("別のサイトからの送信はできません。", 403);
+        if (!req.headers["content-type"]?.startsWith("application/json"))
+          throw new AppError("JSONが必要です。", 415);
+      }
       const url = new URL(req.url, "http://localhost");
       if (!url.pathname.startsWith("/api/")) {
         const files = {
@@ -35,25 +61,21 @@ export function createApp(
         return;
       }
       res.setHeader("Cache-Control", "no-store");
-      if (req.method === "POST" || req.method === "DELETE") {
-        const expected =
-          process.env.PUBLIC_ORIGIN || `http://${req.headers.host}`;
-        if (req.headers.origin && req.headers.origin !== expected)
-          throw new AppError("別のサイトからの送信はできません。", 403);
-        if (!req.headers["content-type"]?.startsWith("application/json"))
-          throw new AppError("JSONが必要です。", 415);
-      }
-      const cookie = req.headers.cookie
-        ?.split(";")
-        .map((v) => v.trim())
-        .find((v) => v.startsWith("participant="))
-        ?.slice(12);
-      const participant = store.participant(cookie);
-      if (participant !== cookie)
-        res.setHeader(
-          "Set-Cookie",
-          `participant=${participant}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${process.env.COOKIE_SECURE === "1" ? "; Secure" : ""}`,
+      const cookies = Object.fromEntries(
+        (req.headers.cookie || "").split(";").map((v) => v.trim().split("=")),
+      );
+      const person = identity.participant(cookies.participant);
+      const participant = person.id;
+      const cookieAttrs =
+        "; HttpOnly; SameSite=Lax; Path=/" +
+        (process.env.COOKIE_SECURE === "1" ? "; Secure" : "");
+      const responseCookies = [];
+      if (person.token !== cookies.participant)
+        responseCookies.push(
+          "participant=" + person.token + cookieAttrs + "; Max-Age=31536000",
         );
+      let isAdmin = adminMode ?? identity.admin(participant, cookies.admin);
+      if (responseCookies.length) res.setHeader("Set-Cookie", responseCookies);
       let body;
       if (req.method === "POST") {
         const chunks = [];
@@ -73,13 +95,28 @@ export function createApp(
       }
       let result;
       const match = url.pathname.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
-      if (url.pathname === "/api/session" && req.method === "GET")
+      if (url.pathname === "/api/admin" && req.method === "POST") {
+        if (body.password !== adminPassword)
+          throw new AppError("パスワードが違います。", 403);
+        responseCookies.push(
+          "admin=" +
+            identity.adminToken(participant) +
+            cookieAttrs +
+            "; Max-Age=43200",
+        );
+        res.setHeader("Set-Cookie", responseCookies);
+        result = { isAdmin: true };
+      } else if (url.pathname === "/api/admin" && req.method === "DELETE") {
+        responseCookies.push("admin=" + cookieAttrs + "; Max-Age=0");
+        res.setHeader("Set-Cookie", responseCookies);
+        result = { isAdmin: false };
+      } else if (url.pathname === "/api/session" && req.method === "GET")
         result = {
-          isAdmin: adminMode,
-          creation: store.creationStatus(participant, adminMode),
+          isAdmin: isAdmin,
+          creation: store.creationStatus(participant, isAdmin),
         };
       else if (url.pathname === "/api/novels" && req.method === "GET")
-        result = store.list();
+        result = store.list(Object.fromEntries(url.searchParams));
       else if (url.pathname === "/api/novels" && req.method === "POST")
         result = store.publish(
           body.title,
@@ -87,12 +124,18 @@ export function createApp(
           participant,
           body.key,
           body.text,
-          adminMode,
+          isAdmin,
         );
       else if (match && !match[2] && req.method === "GET")
-        result = store.get(match[1], participant);
+        result = store.get(
+          match[1],
+          participant,
+          url.searchParams.has("after")
+            ? Number(url.searchParams.get("after"))
+            : null,
+        );
       else if (match && !match[2] && req.method === "DELETE")
-        result = store.delete(match[1], adminMode);
+        result = store.delete(match[1], isAdmin);
       else if (match?.[2] && req.method === "POST")
         result = store.post(
           match[1],

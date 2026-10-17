@@ -134,7 +134,7 @@ async function shelf() {
   if (!sort.value) sort.value = "created_at:desc";
   sort.onchange = () => {
     storageSet("shelf-sort", sort.value);
-    render();
+    load(true);
   };
   actions.append(
     filter,
@@ -142,15 +142,39 @@ async function shelf() {
     button("＋ 新しい本をつくる", createForm, "primary"),
   );
   app.append(message);
-  const books = await api("/novels");
+  let books = [],
+    generation = 0;
+  const more = button("さらに読み込む", () => load(false));
+  app.append(more);
+  async function load(reset) {
+    const ticket = ++generation;
+    if (reset) books = [];
+    more.disabled = true;
+    try {
+      const batch = await api(
+        "/novels?" +
+          new URLSearchParams({
+            limit: 30,
+            offset: books.length,
+            sort: sort.value,
+            filter: filter.value,
+          }),
+      );
+      if (ticket !== generation || !app.contains(more)) return;
+      const seen = new Set(books.map((b) => b.id));
+      books.push(...batch.filter((b) => !seen.has(b.id)));
+      more.hidden = batch.length < 30;
+      render();
+    } catch (e) {
+      message.textContent = e.message;
+    } finally {
+      if (ticket === generation) more.disabled = false;
+    }
+  }
   function render() {
     const list = document.querySelector("#shelf");
     list.replaceChildren();
-    for (const book of sortBooks(books, sort.value).filter(
-      (b) =>
-        filter.value === "all" ||
-        (b.count === b.capacity ? "complete" : "writing") === filter.value,
-    )) {
+    for (const book of books) {
       const a = el("a", undefined, "book");
       a.href = "/novels/" + book.id;
       a.append(
@@ -194,8 +218,8 @@ async function shelf() {
         el("p", "まだ本がありません。最初の一冊をつくりませんか。", "empty"),
       );
   }
-  filter.onchange = render;
-  render();
+  filter.onchange = () => load(true);
+  await load(true);
 }
 function createForm() {
   openCreation({ api, el, button, storageSet, storageRemove, savedJSON });
@@ -214,8 +238,56 @@ function read(id) {
   });
 }
 const match = location.pathname.match(/^\/novels\/([\w-]+)$/);
+function adminDialog() {
+  const dialog = el("dialog"),
+    form = el("form");
+  const input = el("input");
+  input.type = "password";
+  input.autocomplete = "current-password";
+  input.id = "admin-password";
+  const label = el("label", "管理者パスワード");
+  label.htmlFor = input.id;
+  const error = el("p", "", "message");
+  error.setAttribute("role", "status");
+  const submit = el("button", "管理者になる", "primary");
+  submit.type = "submit";
+  form.append(
+    el("h2", "管理者ログイン"),
+    label,
+    input,
+    submit,
+    button("閉じる", () => dialog.close()),
+    error,
+  );
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    try {
+      await api("/admin", { password: input.value });
+      location.reload();
+    } catch (e) {
+      error.textContent = e.message;
+      submit.disabled = false;
+    }
+  };
+  dialog.append(form);
+  dialog.onclose = () => dialog.remove();
+  document.body.append(dialog);
+  dialog.showModal();
+  input.focus();
+}
 async function start() {
   ({ isAdmin } = await api("/session"));
+  const adminControl = button(
+    isAdmin ? "ゲストに戻る" : "管理者",
+    isAdmin
+      ? async () => {
+          await api("/admin", {}, "DELETE");
+          location.reload();
+        }
+      : adminDialog,
+  );
+  document.querySelector("header").append(adminControl);
   if (isAdmin) {
     document
       .querySelector("header")
@@ -223,7 +295,8 @@ async function start() {
     document.querySelector("footer").textContent =
       "管理者モード — 本の作成・繰り返し投稿・削除ができます。";
   }
-  return match ? read(match[1]) : shelf();
+  await (match ? read(match[1]) : shelf());
+  if (match) document.querySelector("#book-menu-items").append(adminControl);
 }
 start().catch((error) => {
   app.append(message);

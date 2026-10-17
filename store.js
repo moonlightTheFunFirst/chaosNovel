@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { normalize, split, count } from "./public/text.js";
+import { normalize, split, count, inspectInput } from "./public/text.js";
 
 export class AppError extends Error {
   constructor(message, status = 400) {
@@ -64,6 +64,12 @@ export class Store {
       if (prior) {
         if (prior.payload !== payload)
           throw new AppError("同じ送信キーで公開内容を変更できません。", 409);
+        if (
+          !this.db
+            .prepare("SELECT 1 FROM novels WHERE id=?")
+            .get(prior.novel_id)
+        )
+          throw new AppError("この本は削除されました。", 404);
         this.db.exec("COMMIT");
         return { id: prior.novel_id };
       }
@@ -76,6 +82,9 @@ export class Store {
         error.creation = permission;
         throw error;
       }
+      this.db
+        .prepare("INSERT OR IGNORE INTO participants VALUES (?)")
+        .run(participant);
       const { id } = this.create(title, capacity);
       this.post(id, participant, key, text, isAdmin, true);
       this.db
@@ -104,14 +113,12 @@ export class Store {
     )
       return cookie;
     const id = randomUUID();
-    this.db.prepare("INSERT INTO participants VALUES (?)").run(id);
+
     return id;
   }
   create(title, capacity) {
     if (
-      typeof title !== "string" ||
-      !title.trim() ||
-      count(title) > 100 ||
+      !inspectInput(title, true).valid ||
       ![4000, 12000, 40000].includes(capacity)
     )
       throw new AppError(
@@ -131,28 +138,72 @@ export class Store {
       );
     return { id };
   }
-  list() {
+  list({
+    limit = 30,
+    offset = 0,
+    sort = "created_at:desc",
+    filter = "all",
+  } = {}) {
+    limit = Number(limit);
+    offset = Number(offset);
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      !Number.isInteger(offset) ||
+      offset < 0
+    )
+      throw new AppError("不正なページ指定です。");
+    limit = Math.min(limit, 100);
+    const [field, direction] = sort.split(":");
+    if (
+      !["title", "created_at", "updated_at"].includes(field) ||
+      !["asc", "desc"].includes(direction) ||
+      !["all", "writing", "complete"].includes(filter)
+    )
+      throw new AppError("不正な並び順です。");
+    const where =
+      filter === "writing"
+        ? "WHERE count<capacity"
+        : filter === "complete"
+          ? "WHERE count=capacity"
+          : "";
     return this.db
-      .prepare("SELECT * FROM novels ORDER BY created_at DESC, rowid DESC")
-      .all();
-  }
-  get(id, participant) {
-    const novel = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
-    if (!novel) throw new AppError("この本は見つかりません。", 404);
-    const own = this.db
       .prepare(
-        "SELECT result FROM posts WHERE novel_id=? AND participant_id=? ORDER BY sequence DESC LIMIT 1",
+        "SELECT * FROM novels " +
+          where +
+          " ORDER BY " +
+          field +
+          " " +
+          direction +
+          ", id ASC LIMIT ? OFFSET ?",
       )
-      .get(id, participant);
-    return {
-      ...novel,
-      posts: this.db
+      .all(limit, offset);
+  }
+  get(id, participant, after = null) {
+    if (after !== null && (!Number.isSafeInteger(after) || after < 0))
+      throw new AppError("不正なrevisionです。");
+    this.db.exec("SAVEPOINT reading");
+    try {
+      const novel = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
+      if (!novel) throw new AppError("この本は見つかりません。", 404);
+      const own = this.db
         .prepare(
-          "SELECT sequence,published,count FROM posts WHERE novel_id=? ORDER BY sequence",
+          "SELECT result FROM posts WHERE novel_id=? AND participant_id=? ORDER BY sequence DESC LIMIT 1",
         )
-        .all(id),
-      own: own ? JSON.parse(own.result) : null,
-    };
+        .get(id, participant);
+      return {
+        ...novel,
+        after,
+        posts: this.db
+          .prepare(
+            "SELECT sequence,published,count FROM posts WHERE novel_id=? AND sequence>? ORDER BY sequence",
+          )
+          .all(id, after ?? -1),
+        own: own ? JSON.parse(own.result) : null,
+      };
+    } finally {
+      this.db.exec("RELEASE reading");
+    }
   }
   delete(id, isAdmin = false) {
     if (!isAdmin) throw new AppError("本の削除は管理者のみ利用できます。", 403);
@@ -176,9 +227,14 @@ export class Store {
       typeof text !== "string"
     )
       throw new AppError("投稿形式が正しくありません。");
+    const input = inspectInput(text);
+    if (!input.valid) throw new AppError(input.error);
     text = normalize(text);
     this.db.exec(nested ? "SAVEPOINT posting" : "BEGIN IMMEDIATE");
     try {
+      this.db
+        .prepare("INSERT OR IGNORE INTO participants VALUES (?)")
+        .run(participant);
       const previous = this.db
         .prepare(
           "SELECT * FROM posts WHERE novel_id=? AND participant_id=? AND request_key=?",

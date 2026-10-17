@@ -189,7 +189,7 @@ test("same participant race and last-character race each publish only once", asy
 });
 test("HTTP independent cookies, repeat request, invalid input and origin", async (t) => {
   const { store } = fixture(t);
-  const server = createApp(store);
+  const server = createApp(store, { adminMode: true });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => new Promise((r) => server.close(r)));
   const base = `http://127.0.0.1:${server.address().port}`;

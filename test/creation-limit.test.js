@@ -35,7 +35,10 @@ test("seven days: failure, retry, deletion, other books, exact boundary and admi
     assert.ok(s.post(other.id, p, randomUUID(), "続"));
     s.delete(first.id, true);
     assert.equal(s.creationStatus(p).canCreate, false);
-    assert.deepEqual(s.publish("題", 4000, p, key, "あ"), first);
+    assert.throws(
+      () => s.publish("題", 4000, p, key, "あ"),
+      (e) => e.status === 404,
+    );
     for (let i = 0; i < 3; i++)
       s.publish("管理者", 4000, p, randomUUID(), "文", true);
     assert.equal(s.creationStatus(p, true).canCreate, true);

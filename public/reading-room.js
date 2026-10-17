@@ -1,5 +1,6 @@
+import { mergeDelta, visiblePolling, refreshAfterSuccess } from "./sync.js";
 import { formatDate } from "./book-meta.js";
-import { count, split, normalize } from "./text.js";
+import { count, split, normalize, inspectInput } from "./text.js";
 import {
   PagedText,
   ReadingGate,
@@ -164,7 +165,8 @@ export async function openReadingRoom(id, helpers) {
     previous.disabled = current <= 0;
   }
   function updateActions() {
-    const n = count(draft.value);
+    const input = inspectInput(draft.value);
+    const n = input.count;
     writeButton.hidden = writing;
     writeButton.disabled = !gate.unlocked || !canPost();
     writeButton.title = !gate.unlocked
@@ -184,12 +186,13 @@ export async function openReadingRoom(id, helpers) {
       sending ||
       !!pending ||
       composing ||
-      n < 1 ||
-      n > 400;
+      !input.valid;
     if (!composing)
       draft.readOnly = sending || !!pending || !canPost() || !gate.unlocked;
     document.querySelector("#reading-hint").textContent = writing
-      ? `原稿 ${n} / 400字　残り ${book.capacity - book.count}字`
+      ? input.count === null
+        ? input.error
+        : `原稿 ${n} / 400字　残り ${book.capacity - book.count}字`
       : deleted
         ? "この本は削除されました。"
         : book.count === book.capacity
@@ -381,7 +384,13 @@ export async function openReadingRoom(id, helpers) {
         selection = null;
       }
       message.textContent = `${result.publishedCount}字を掲載しました。元の原稿は「掲載結果」で確認できます。`;
-      book = await api("/novels/" + id);
+      const refreshed = await refreshAfterSuccess(() => api("/novels/" + id));
+      if (refreshed.refreshError) {
+        message.textContent +=
+          " 本文の再取得に失敗しました。更新を待つか再読込してください。";
+        return;
+      }
+      book = refreshed.book;
       newer = null;
       notice.replaceChildren();
       setMode(false);
@@ -409,7 +418,16 @@ export async function openReadingRoom(id, helpers) {
   }).observe(stage);
   async function poll() {
     try {
-      const latest = await api("/novels/" + id);
+      const base = newer || book;
+      const delta = await api("/novels/" + id + "?after=" + base.revision);
+      // A successful send may have replaced the snapshot while this request was in flight.
+      if ((newer || book).revision !== base.revision) return;
+      let latest;
+      try {
+        latest = mergeDelta(base, delta);
+      } catch {
+        latest = await api("/novels/" + id);
+      }
       if (latest.revision < book.revision) return;
       if (latest.own && latest.own.sequence >= (book.own?.sequence ?? 0)) {
         book.own = latest.own;
@@ -448,9 +466,14 @@ export async function openReadingRoom(id, helpers) {
         updateActions();
       } else
         message.textContent = "更新を確認できません。原稿は保持しています。";
-    } finally {
-      if (!deleted) setTimeout(poll, 3000);
     }
   }
-  setTimeout(poll, 3000);
+  const stopPolling = visiblePolling(document, async () => {
+    if (deleted) {
+      stopPolling();
+      return;
+    }
+    await poll();
+  });
+  window.addEventListener("pagehide", stopPolling, { once: true });
 }
