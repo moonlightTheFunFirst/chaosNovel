@@ -1,0 +1,392 @@
+:root {
+  color-scheme: light;
+  --paper: #f4f0e6;
+  --ink: #302e29;
+  --muted: #777368;
+  --line: #d8d1c2;
+  --red: #914b3c;
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+.book-card {
+  display: flex;
+  flex-direction: column;
+}
+.book-card .book {
+  flex: 1;
+}
+.delete-book {
+  margin-top: 12px;
+  align-self: flex-end;
+  color: var(--red);
+  border-color: var(--line);
+  font-size: 12px;
+}
+.admin-badge {
+  color: var(--red);
+  font-size: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.danger {
+  color: var(--red);
+  border-color: var(--red);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background-image: repeating-linear-gradient(
+    15deg,
+    transparent 0 5px,
+    #60503303 6px 7px
+  );
+}
+header,
+main,
+footer {
+  max-width: 1200px;
+  margin: auto;
+  padding: 28px 44px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+.brand {
+  font-size: 25px;
+  letter-spacing: 0.17em;
+}
+.brand span {
+  display: block;
+  font: 10px/2 sans-serif;
+  letter-spacing: 0.35em;
+}
+.tagline,
+footer {
+  font-size: 12px;
+  color: var(--muted);
+}
+footer {
+  border-top: 1px solid var(--line);
+  margin-top: 50px;
+}
+h1 {
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.1em;
+}
+h2 {
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  font-size: 23px;
+}
+p {
+  line-height: 1.9;
+}
+.eyebrow {
+  color: var(--red);
+  font: 11px sans-serif;
+  letter-spacing: 0.25em;
+}
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 40px 0 45px;
+}
+.hero p {
+  color: var(--muted);
+  font-size: 14px;
+}
+.hero-mark {
+  writing-mode: vertical-rl;
+  font-size: 23px;
+  line-height: 2.4;
+  letter-spacing: 0.18em;
+  padding: 12px 30px;
+  border-right: 1px solid var(--line);
+}
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button,
+.button {
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  padding: 12px 20px;
+  background: transparent;
+  display: inline-block;
+  font-size: 14px;
+}
+button.primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+button:hover,
+.button:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+button.primary:hover {
+  background: var(--red);
+  color: white;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 4px;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 22px 0;
+}
+.toolbar h2 {
+  margin: 0;
+}
+select,
+input {
+  background: #ffffff40;
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+input {
+  width: 100%;
+  margin: 10px 0 24px;
+}
+label {
+  display: block;
+  font-size: 14px;
+}
+form {
+  max-width: 560px;
+}
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+.book {
+  border: 1px solid var(--line);
+  border-left: 5px double var(--line);
+  padding: 26px 24px;
+  background: #fff8;
+  min-height: 245px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.book:hover {
+  border-color: #a9997c;
+}
+.book h2 {
+  overflow-wrap: anywhere;
+  margin: 20px 0;
+  font-size: 21px;
+}
+.meta {
+  font: 12px/1.8 sans-serif;
+  color: var(--muted);
+}
+.badge {
+  color: var(--red);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+.progress {
+  height: 2px;
+  background: var(--line);
+  margin: 18px 0 8px;
+}
+.progress progress {
+  width: 100%;
+  height: 2px;
+  display: block;
+  accent-color: var(--red);
+}
+.empty {
+  border: 1px dashed var(--line);
+  padding: 50px;
+  text-align: center;
+  color: var(--muted);
+  grid-column: 1/-1;
+}
+.back {
+  font-size: 13px;
+  color: var(--muted);
+}
+.book-heading {
+  padding: 28px 0 10px;
+}
+.book-heading h1 {
+  font-size: 32px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.paper {
+  border: 1px solid var(--line);
+  background: #fff9;
+  padding: 36px;
+  box-shadow: 0 8px 22px #54442506;
+}
+.reader {
+  height: 440px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  direction: rtl;
+  overscroll-behavior: contain;
+}
+.vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 2.15;
+  letter-spacing: 0.06em;
+  font-size: 19px;
+  direction: ltr;
+}
+.reader .vertical {
+  height: 100%;
+  min-width: 100%;
+  text-align: start;
+}
+.composer {
+  margin-top: 36px;
+}
+.composer textarea {
+  display: block;
+  width: 100%;
+  height: 320px;
+  padding: 25px;
+  background: #fffc;
+  border: 1px solid var(--line);
+  resize: vertical;
+  writing-mode: vertical-rl;
+  line-height: 2.1;
+  letter-spacing: 0.06em;
+  font-size: 19px;
+}
+.note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+.message {
+  color: var(--red);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.notice {
+  padding: 14px 0;
+  color: var(--red);
+  font-size: 13px;
+  min-height: 45px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.result {
+  padding: 20px;
+  border-left: 3px solid var(--red);
+  background: #fff6;
+  margin: 20px 0;
+}
+.result pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+dialog {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 28px;
+  max-width: 650px;
+  width: 90%;
+}
+dialog::backdrop {
+  background: #25201966;
+}
+.preview {
+  height: 280px;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  margin: 18px 0;
+}
+.preview .vertical {
+  height: 100%;
+  min-width: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  header,
+  main,
+  footer {
+    padding: 22px;
+  }
+  .tagline {
+    display: none;
+  }
+  .hero {
+    gap: 12px;
+    padding: 26px 0;
+  }
+  .hero h1 {
+    font-size: 29px;
+  }
+  .hero-mark {
+    font-size: 16px;
+    padding: 8px 12px;
+  }
+  .shelf {
+    grid-template-columns: 1fr;
+  }
+  .book {
+    min-height: 190px;
+  }
+  .paper {
+    padding: 20px;
+  }
+  .reader {
+    height: 380px;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .book-heading h1 {
+    font-size: 26px;
+  }
+  .composer textarea {
+    height: 300px;
+  }
+}
