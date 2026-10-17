@@ -22,6 +22,7 @@ export function createApp(
           "/licenses.txt": ["dist/licenses.txt", "text/plain"],
           "/app.js": ["dist/app.js", "text/javascript"],
           "/style.css": ["public/style.css", "text/css"],
+          "/reading-room.css": ["public/reading-room.css", "text/css"],
         };
         const target =
           files[url.pathname] ??
