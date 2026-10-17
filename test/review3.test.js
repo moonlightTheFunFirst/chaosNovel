@@ -119,11 +119,18 @@ test("guest logout writes no admin epochs; authenticated logout revokes token", 
 test("code point title order and cursor agree with Japanese, numbers, supplementary characters and ties", () => {
   const store = new Store(":memory:");
   try {
+    // Simulate legacy duplicates before the new insert guard.
+
     const titles = ["ア", "あ", "本2", "本10", "本2", "😀", "𠀀", "２"];
-    const books = titles.map((title) => ({
-      title,
-      id: store.create(title, 4000).id,
-    }));
+    const books = titles.map((title, i) => {
+      const id = "legacy" + i;
+      store.db
+        .prepare(
+          "INSERT INTO novels(id,title,capacity,created_at,updated_at,title_key,title_legacy_duplicate) VALUES (?,?,4000,?,?,?,1)",
+        )
+        .run(id, title, "2026", "2026", title);
+      return { title, id };
+    });
     for (const direction of ["asc", "desc"]) {
       const expected = [...books].sort(
         (a, b) =>

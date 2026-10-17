@@ -439,3 +439,15 @@ dialog::backdrop {
     height: 300px;
   }
 }
+
+.title-error {
+  color: var(--red);
+  font-weight: 600;
+  margin: 0.4rem 0 0.6rem;
+}
+#new-book-form button.primary:disabled {
+  background: var(--line);
+  color: var(--muted);
+  opacity: 1;
+  cursor: not-allowed;
+}

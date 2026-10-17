@@ -1,7 +1,14 @@
+import { migrateTitleKeys } from "./migrations/title-keys.js";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { normalize, split, count, inspectInput } from "./public/text.js";
+import {
+  normalize,
+  split,
+  count,
+  inspectInput,
+  titleKey,
+} from "./public/text.js";
 
 export class AppError extends Error {
   constructor(message, status = 400) {
@@ -29,8 +36,12 @@ export class Store {
         ),
       );
     this.db.exec(
-      readFileSync(new URL("./schema.sql", import.meta.url), "utf8"),
+      readFileSync(new URL("./schema.sql", import.meta.url), "utf8").replace(
+        "PRAGMA user_version = 3;",
+        "",
+      ),
     );
+    migrateTitleKeys(this.db);
   }
 
   creationStatus(participant, isAdmin = false) {
@@ -116,26 +127,49 @@ export class Store {
 
     return id;
   }
+  titleAvailability(title) {
+    const input = inspectInput(title, true);
+    if (!input.valid) throw new AppError(input.error);
+    return {
+      available: !this.db
+        .prepare("SELECT 1 FROM novels WHERE title_key = ? LIMIT 1")
+        .get(titleKey(title)),
+    };
+  }
   create(title, capacity) {
-    if (
-      !inspectInput(title, true).valid ||
-      ![4000, 12000, 40000].includes(capacity)
-    )
+    const input = inspectInput(title, true);
+    if (!input.valid) throw new AppError(input.error);
+    if (![4000, 12000, 40000].includes(capacity))
       throw new AppError(
         "タイトルは1〜100字、長さは指定の区分を選んでください。",
       );
     const id = randomUUID();
-    this.db
-      .prepare(
-        "INSERT INTO novels(id,title,capacity,created_at,updated_at) VALUES (?,?,?,?,?)",
+    try {
+      const inserted = this.db
+        .prepare(
+          "INSERT INTO novels(id,title,capacity,created_at,updated_at,title_key) SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM novels WHERE title_key=?)",
+        )
+        .run(
+          id,
+          normalize(title),
+          capacity,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          titleKey(title),
+          titleKey(title),
+        );
+      if (!inserted.changes) throw new Error("duplicate_novel_title");
+    } catch (error) {
+      if (
+        error.message === "duplicate_novel_title" ||
+        error.message === "UNIQUE constraint failed: novels.title_key"
       )
-      .run(
-        id,
-        normalize(title),
-        capacity,
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
+        throw new AppError(
+          "この名前の本は既にあります。別の名前を入力してください。",
+          400,
+        );
+      throw error;
+    }
     return { id };
   }
   list(options = {}) {

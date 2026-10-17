@@ -116,7 +116,9 @@ export function createApp(
       }
       let result;
       const match = url.pathname.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
-      if (url.pathname === "/api/admin" && req.method === "POST") {
+      if (url.pathname === "/api/title-availability" && req.method === "POST") {
+        result = store.titleAvailability(body.title);
+      } else if (url.pathname === "/api/admin" && req.method === "POST") {
         await login(clientAddress(req), body.password);
         responseCookies.push(
           "admin=" +

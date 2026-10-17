@@ -1,5 +1,6 @@
 import { formatDate } from "./book-meta.js";
-import { count, inspectInput } from "./text.js";
+import { titleValidation } from "./title-validation.js";
+import { inspectInput } from "./text.js";
 export function openCreation({
   api,
   el,
@@ -13,7 +14,7 @@ export function openCreation({
   let pending = savedJSON("new-book-pending");
   if (pending) saved = pending;
   app.innerHTML =
-    '<a class="back" href="/">← 本棚へ</a><section class="book-heading"><h1>物語に、名前と最初の一節を。</h1><p>公開するまで、本棚には追加されません。</p></section><form id="new-book-form"><label for="title">本のタイトル（1〜100字）</label><input id="title" required autocomplete="off"><label for="length">一冊の長さ</label><select id="length"><option value="4000">短編 — 4,000字</option><option value="12000">中編 — 12,000字</option><option value="40000">長編 — 40,000字</option></select><p>タイトルと長さは公開後に変更できません。</p><button class="primary">最初の一節を書く</button></form>';
+    '<a class="back" href="/">← 本棚へ</a><section class="book-heading"><h1>物語に、名前と最初の一節を。</h1><p>公開するまで、本棚には追加されません。</p></section><form id="new-book-form"><label for="title">本のタイトル（1〜100字）</label><input id="title" required autocomplete="off" aria-describedby="title-error"><p id="title-error" class="title-error" role="status" aria-live="polite"></p><label for="length">一冊の長さ</label><select id="length"><option value="4000">短編 — 4,000字</option><option value="12000">中編 — 12,000字</option><option value="40000">長編 — 40,000字</option></select><p>既にある本と同じ名前は使えません（空白・英字の大小・全角半角・一部の不可視文字は区別しません）。タイトルと長さは公開後に変更できません。</p><button class="primary">最初の一節を書く</button></form>';
   const form = app.querySelector("form"),
     title = app.querySelector("#title"),
     length = app.querySelector("#length");
@@ -35,7 +36,21 @@ export function openCreation({
       status.textContent =
         "端末への下書き保存ができません。画面を閉じる前に原稿をコピーしてください。";
   }
-  title.oninput = length.onchange = save;
+  const next = form.querySelector("button.primary");
+  const titleCheck = titleValidation({
+    input: title,
+    message: app.querySelector("#title-error"),
+    next,
+    check: (value) => api("/title-availability", { title: value }),
+  });
+  const recheck = button("名前を再確認", () => titleCheck.validate());
+  app.querySelector("#title-error").after(recheck);
+  title.oninput = () => {
+    save();
+    titleCheck.validate();
+  };
+  length.onchange = save;
+  titleCheck.validate();
   const editor = el("section", undefined, "creation-editor");
   editor.hidden = true;
   const heading = el("h1", saved.title || "最初の一節", "creation-title");
@@ -79,6 +94,7 @@ export function openCreation({
     editor.hidden = true;
     document.body.classList.remove("creation-writing");
     form.hidden = false;
+    titleCheck.validate();
   });
   const check = button("掲載内容を確認", preview, "primary");
   const retry = button("送信結果を確認・再送", () => send(pending));
@@ -132,6 +148,7 @@ export function openCreation({
   };
   form.onsubmit = (e) => {
     e.preventDefault();
+    if (!titleCheck.isValid() || next.disabled) return;
     if (!inspectInput(title.value, true).valid) {
       status.textContent = inspectInput(title.value, true).error;
       return;

@@ -40,7 +40,7 @@ test("seven days: failure, retry, deletion, other books, exact boundary and admi
       (e) => e.status === 404,
     );
     for (let i = 0; i < 3; i++)
-      s.publish("管理者", 4000, p, randomUUID(), "文", true);
+      s.publish("管理者" + i, 4000, p, randomUUID(), "文", true);
     assert.equal(s.creationStatus(p, true).canCreate, true);
     assert.equal(s.creationStatus(p).nextCreationAt, next);
     now += week - 1;

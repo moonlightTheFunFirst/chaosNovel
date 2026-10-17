@@ -323,8 +323,15 @@ test("cursor pages survive insert/delete between pages in all six sort orders an
   ]) {
     const store = new Store(":memory:");
     try {
+      // Simulate legacy duplicates before the new insert guard.
+
       for (let i = 0; i < 8; i++) {
-        const { id } = store.create(String(i >> 1), 4000);
+        const id = randomUUID();
+        store.db
+          .prepare(
+            "INSERT INTO novels(id,title,capacity,created_at,updated_at,title_key,title_legacy_duplicate) VALUES (?,?,4000,?,?,?,1)",
+          )
+          .run(id, String(i >> 1), "2026", "2026", String(i >> 1));
         store.db
           .prepare("UPDATE novels SET created_at=?,updated_at=? WHERE id=?")
           .run(String(i >> 1), String(i >> 1), id);

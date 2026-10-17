@@ -155,8 +155,11 @@ test("title boundaries and allowed length classes", (t) => {
   const { store } = fixture(t);
   for (const title of ["", " \n", "あ".repeat(101)])
     assert.throws(() => store.create(title, 4000));
-  for (const capacity of [4000, 12000, 40000])
-    assert.ok(store.create("👩🏽‍💻".repeat(100), capacity).id);
+  for (const capacity of [4000, 12000, 40000]) {
+    const book = store.create("👩🏽‍💻".repeat(100), capacity);
+    assert.ok(book.id);
+    store.delete(book.id, true);
+  }
   assert.throws(() => store.create("本", 100));
 });
 test("independent connections concurrently append all posts with unique sequence", async (t) => {
