@@ -18,7 +18,9 @@
     "dev:workers": "npm run build:workers && wrangler dev --local --env local --ip 127.0.0.1 --port 8787",
     "check:workers": "npm run build:workers && wrangler deploy --dry-run --outdir .worker-build",
     "test:workers": "node --test test/workers.test.js",
-    "workers:rekey": "node scripts/rebuild-d1-title-keys.js"
+    "workers:rekey": "node scripts/rebuild-d1-title-keys.js",
+    "check:deploy": "node scripts/deploy-workers.js --check",
+    "deploy:workers": "node scripts/deploy-workers.js"
   },
   "dependencies": {
     "graphemer": "1.4.0"

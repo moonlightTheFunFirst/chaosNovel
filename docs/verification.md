@@ -205,3 +205,13 @@ Codexアプリ内ブラウザで次を操作・確認。
 - scripts/restart-server.ps1でローカルWorkersを再起動、127.0.0.1:8787でReadyを確認。既存ローカルDBと秘密設定を保持。マイグレーション不要。
 - 未実施：ブラウザでの作成フォーム表示・下書き復元の手動操作、縦書き・IME、スマホ実機確認。
 - コミット・プッシュ・本番デプロイは未実施。
+
+## 2026-10-18 デプロイ準備
+
+- 最新AGENTS.mdを確認。管理者の区分例外、管理者にも適用する冊数上限、本文を保持する執筆終了は実装と一致。ユーザーが更新したAGENTS.mdは編集せず保持した。
+- READMEの古い「管理者の例外はAGENTSと異なる」という説明を修正。MAX_ACTIVE_NOVELS設定表とdocs/deployment.mdへの導線を追加。
+- check:deployを追加し、仮URL・仮D1 ID・本番でのローカル設定・varsへの秘密混入・不正な区分/冊数を拒否。現在の仮PUBLIC_ORIGINで停止することを確認。リモートDBや秘密の登録状態は未検査。
+- deploy:workersを追加し、設定検査後に画面をビルドしてトップレベル環境へ公開する手順を固定。実際のdeploy経路は未実行。
+- npm test: 104件成功。npm run check:workers: 成功（dry-run、公開なし）。git diff --check: 問題なし。
+- Cloudflareの最新公式資料とインストール済みWranglerの--secrets-file対応を確認。空のD1でも0001〜0004とタイトルキー初期化が必要なことを手順化。
+- Cloudflareログイン・D1作成・remoteマイグレーション・secret登録・本番公開・コミットは未実施。ブラウザ/IME/スマホの手動確認は今回未実施。
