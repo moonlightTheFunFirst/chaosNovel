@@ -1,3 +1,4 @@
+import { retryAfterMs } from "./sync.js";
 import { showRules } from "./rules.js";
 import { openCreation } from "./creation.js";
 import { formatDate } from "./book-meta.js";
@@ -18,10 +19,13 @@ async function api(path, body, method = body ? "POST" : "GET") {
     headers: method !== "GET" ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json();
+  const data = await response
+    .json()
+    .catch(() => ({ error: "通信に失敗しました。" }));
   if (!response.ok) {
     const error = new Error(data.error);
     error.status = response.status;
+    error.retryAfterMs = retryAfterMs(response.headers.get("Retry-After"));
     error.creation = data.creation;
     throw error;
   }

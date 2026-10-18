@@ -3,3 +3,10 @@ data/
 .env
 *.sqlite*
 dist/
+
+.wrangler/
+.workers-assets/
+.worker-build/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example

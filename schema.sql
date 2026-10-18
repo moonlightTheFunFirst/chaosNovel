@@ -32,6 +32,6 @@ CREATE TABLE IF NOT EXISTS creation_limits (
  participant_id TEXT PRIMARY KEY REFERENCES participants(id),
  next_allowed_at INTEGER NOT NULL
 );
-PRAGMA user_version = 3;
+
 CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS admin_epochs (participant_id TEXT PRIMARY KEY, epoch INTEGER NOT NULL DEFAULT 0);

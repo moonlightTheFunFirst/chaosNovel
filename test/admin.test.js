@@ -44,9 +44,9 @@ test("v1 migration preserves posts, supports admin repetition and atomic deletio
       " UNIQUE(novel_id, participant_id),\n UNIQUE(novel_id, participant_id, request_key)",
     )
     .replace(/CREATE UNIQUE INDEX IF NOT EXISTS one_regular_post[^;]+;/, "")
-    .replace(", updated_at TEXT NOT NULL", "")
-    .replace("user_version = 3", "user_version = 1");
+    .replace(", updated_at TEXT NOT NULL", "");
   old.exec(schema);
+  old.exec("PRAGMA user_version = 1");
   const result = {
     original: "あ",
     published: "あ",

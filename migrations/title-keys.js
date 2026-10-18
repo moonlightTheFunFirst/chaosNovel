@@ -1,5 +1,7 @@
 import { titleKey, TITLE_KEY_VERSION } from "../public/text.js";
 
+export const storedTitleKeyVersion = `${TITLE_KEY_VERSION}:${process.versions.unicode}`;
+
 export function migrateTitleKeys(db) {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -7,7 +9,7 @@ export function migrateTitleKeys(db) {
     const keyVersion = db
       .prepare("SELECT value FROM app_meta WHERE key='title_key_version'")
       .get()?.value;
-    if (version < 4 || keyVersion !== TITLE_KEY_VERSION) {
+    if (version < 4 || keyVersion !== storedTitleKeyVersion) {
       // Drop expression objects before updating rows; no SQL function is needed.
       db.exec(`DROP TRIGGER IF EXISTS novels_unique_title_insert;
         DROP TRIGGER IF EXISTS novels_unique_title_update;
@@ -39,7 +41,7 @@ export function migrateTitleKeys(db) {
         PRAGMA user_version=4;`);
       db.prepare(
         "INSERT INTO app_meta(key,value) VALUES ('title_key_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      ).run(TITLE_KEY_VERSION);
+      ).run(storedTitleKeyVersion);
     }
     db.exec("COMMIT");
   } catch (error) {

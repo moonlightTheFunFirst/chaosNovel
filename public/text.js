@@ -2,12 +2,12 @@ import GraphemerModule from "graphemer";
 const Graphemer = GraphemerModule.default ?? GraphemerModule;
 const splitter = new Graphemer();
 export const normalize = (text) => text.replace(/\r\n?/g, "\n");
-export const TITLE_KEY_VERSION = "1";
+export const TITLE_KEY_VERSION = "2";
 export const titleKey = (text) =>
   normalize(text)
     .normalize("NFKC")
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
-    .replace(/\s/gu, "")
+    .replace(/[\s\u2800]/gu, "")
     .toLowerCase();
 export const split = (text) => splitter.splitGraphemes(normalize(text));
 export const count = (text) => split(text).length;

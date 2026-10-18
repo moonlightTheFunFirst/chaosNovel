@@ -12,13 +12,21 @@
     "test": "node --test",
     "build": "node build.js",
     "prestart": "npm run build",
-    "predev": "npm run build"
+    "predev": "npm run build",
+    "build:workers": "node scripts/build-workers.js",
+    "workers:setup": "node scripts/setup-workers.js && npm run build:workers && wrangler d1 migrations apply chaos-novel-local --local --env local && node scripts/rebuild-d1-title-keys.js --local",
+    "dev:workers": "npm run build:workers && wrangler dev --local --env local --ip 127.0.0.1 --port 8787",
+    "check:workers": "npm run build:workers && wrangler deploy --dry-run --outdir .worker-build",
+    "test:workers": "node --test test/workers.test.js",
+    "workers:rekey": "node scripts/rebuild-d1-title-keys.js"
   },
   "dependencies": {
     "graphemer": "1.4.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "prettier": "3.9.10"
+    "miniflare": "5.20261012.1-beta",
+    "prettier": "3.9.10",
+    "wrangler": "4.151.1"
   }
 }

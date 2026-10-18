@@ -1,3 +1,4 @@
+import { storedTitleKeyVersion } from "../migrations/title-keys.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -166,7 +167,7 @@ test("v3 expression indexes migrate atomically without registering SQL functions
       s.db
         .prepare("SELECT value FROM app_meta WHERE key='title_key_version'")
         .get().value,
-      "1",
+      storedTitleKeyVersion,
     );
     assert.throws(() => s.create("abc", 4000), /既にあります/);
     s.delete("a", true);

@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chaos-novel",
+  "main": "workers/index.js",
+  "compatibility_date": "2026-10-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": ".workers-assets",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/novels/*"],
+  },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://replace-before-publishing.invalid",
+    "COOKIE_SECURE": "1",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chaos-novel-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "workers/migrations",
+    },
+  ],
+  "env": {
+    "local": {
+      "name": "chaos-novel-local",
+      "vars": {
+        "PUBLIC_ORIGIN": "http://127.0.0.1:8787",
+        "COOKIE_SECURE": "0",
+        "LOCAL_DEV": "1",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "chaos-novel-local",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "workers/migrations",
+        },
+      ],
+    },
+  },
+}

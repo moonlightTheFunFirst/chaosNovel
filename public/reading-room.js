@@ -21,6 +21,7 @@ export async function openReadingRoom(id, helpers) {
     savedJSON,
   } = helpers;
   let book = await api("/novels/" + id);
+  let stopPolling;
   let newer = null,
     writing = false,
     composing = false,
@@ -55,6 +56,11 @@ export async function openReadingRoom(id, helpers) {
   const menu = document.querySelector("#book-menu-items");
   const dates = el("p", "", "meta");
   menu.append(dates);
+  const pollingStatus = el("span", "", "meta");
+  const refreshButton = button("更新を確認", () => stopPolling?.refresh());
+  document
+    .querySelector(".reading-announcement")
+    .append(pollingStatus, refreshButton);
   if (isAdmin) {
     menu.append(
       el("p", "管理者モード", "badge"),
@@ -222,6 +228,7 @@ export async function openReadingRoom(id, helpers) {
         end: draft.selectionEnd,
         left: draft.scrollLeft,
       };
+    if (edit) stopPolling?.activity();
     writing = edit;
     draft.hidden = !edit;
     // Visibility, instead of display:none, lets resize measure the reading flow.
@@ -365,6 +372,7 @@ export async function openReadingRoom(id, helpers) {
   }
   async function send(request) {
     if (!request || sending) return;
+    let sendError;
     pending = request;
     storageSet(pendingKey, JSON.stringify(request));
     sending = true;
@@ -386,6 +394,7 @@ export async function openReadingRoom(id, helpers) {
       message.textContent = `${result.publishedCount}字を掲載しました。元の原稿は「掲載結果」で確認できます。`;
       const refreshed = await refreshAfterSuccess(() => api("/novels/" + id));
       if (refreshed.refreshError) {
+        sendError = refreshed.refreshError;
         message.textContent +=
           " 本文の再取得に失敗しました。更新を待つか再読込してください。";
         return;
@@ -398,6 +407,7 @@ export async function openReadingRoom(id, helpers) {
       move(pager.count - 1);
       if (result.unpublished) showReceipt();
     } catch (error) {
+      sendError = error;
       if (error.status && error.status < 500) {
         pending = null;
         storageRemove(pendingKey);
@@ -407,6 +417,9 @@ export async function openReadingRoom(id, helpers) {
         (pending ? " 原稿を保持しています。同じ投稿を再送できます。" : "");
     } finally {
       sending = false;
+      stopPolling?.activity();
+      if (sendError) stopPolling?.defer(sendError);
+      stopPolling?.reconcile();
       update();
     }
   }
@@ -458,6 +471,7 @@ export async function openReadingRoom(id, helpers) {
         );
       }
       if (!composing) update();
+      return { updated: latest.revision > base.revision };
     } catch (error) {
       if (error.status === 404) {
         deleted = true;
@@ -466,14 +480,14 @@ export async function openReadingRoom(id, helpers) {
         updateActions();
       } else
         message.textContent = "更新を確認できません。原稿は保持しています。";
+      throw error;
     }
   }
-  const stopPolling = visiblePolling(document, async () => {
-    if (deleted) {
-      stopPolling();
-      return;
-    }
-    await poll();
+  stopPolling = visiblePolling(document, poll, undefined, {
+    eligible: () => !deleted && (book.count < book.capacity || !!pending),
+    onPause: (paused) => {
+      pollingStatus.textContent = paused ? "更新の確認を止めています" : "";
+    },
   });
   window.addEventListener("pagehide", stopPolling, { once: true });
 }

@@ -1,0 +1,5 @@
+# Copy values into .dev.vars.local for local development only.
+# COOKIE_SECRET must be a persistent random value of at least 32 characters.
+COOKIE_SECRET=
+# Unset/empty disables login. For local testing you may explicitly set 1234.
+ADMIN_PASSWORD=

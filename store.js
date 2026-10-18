@@ -1,3 +1,4 @@
+import { AppError } from "./app-error.js";
 import { migrateTitleKeys } from "./migrations/title-keys.js";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
@@ -10,12 +11,7 @@ import {
   titleKey,
 } from "./public/text.js";
 
-export class AppError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
+export { AppError } from "./app-error.js";
 export class Store {
   constructor(path, { now = Date.now } = {}) {
     this.now = now;
@@ -36,10 +32,7 @@ export class Store {
         ),
       );
     this.db.exec(
-      readFileSync(new URL("./schema.sql", import.meta.url), "utf8").replace(
-        "PRAGMA user_version = 3;",
-        "",
-      ),
+      readFileSync(new URL("./schema.sql", import.meta.url), "utf8"),
     );
     migrateTitleKeys(this.db);
   }
