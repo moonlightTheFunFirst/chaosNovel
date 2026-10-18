@@ -115,7 +115,9 @@ export function createApp(
           throw new AppError("投稿形式が正しくありません。");
       }
       let result;
-      const match = url.pathname.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
+      const match = url.pathname.match(
+        /^\/api\/novels\/([\w-]+)(\/posts|\/finish)?$/,
+      );
       if (url.pathname === "/api/title-availability" && req.method === "POST") {
         result = store.titleAvailability(body.title);
       } else if (url.pathname === "/api/admin" && req.method === "POST") {
@@ -157,6 +159,8 @@ export function createApp(
             ? Number(url.searchParams.get("after"))
             : null,
         );
+      else if (match?.[2] === "/finish" && req.method === "POST")
+        result = store.finish(match[1], isAdmin);
       else if (match && !match[2] && req.method === "DELETE")
         result = store.delete(match[1], isAdmin);
       else if (match?.[2] && req.method === "POST")
@@ -193,7 +197,9 @@ if (
 ) {
   const path = resolve(process.env.DB_PATH || "./data/novels.sqlite");
   mkdirSync(dirname(path), { recursive: true });
-  const store = new Store(path);
+  const store = new Store(path, {
+    maxActiveNovels: process.env.MAX_ACTIVE_NOVELS ?? 30,
+  });
   const server = createApp(store);
   server.listen(
     Number(process.env.PORT || 3000),

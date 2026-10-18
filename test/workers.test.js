@@ -82,6 +82,28 @@ async function fixture(t, old = false) {
       .map((s) => db.prepare(s)),
   );
   if (!old) await migrateKeys(db);
+  await db
+    .prepare(
+      readFileSync(
+        new URL(
+          "../workers/migrations/0004_novel_closures.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    )
+    .run();
+  await db
+    .prepare(
+      readFileSync(
+        new URL(
+          "../workers/migrations/0003_active_novels.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    )
+    .run();
   return { mf, db, store: new D1Store(db) };
 }
 function client(mf) {
@@ -434,6 +456,17 @@ test("Workers restart preserves identity, limits and data; password rotation and
       .map((s) => db.prepare(s)),
   );
   await migrateKeys(db);
+  await db
+    .prepare(
+      readFileSync(
+        new URL(
+          "../workers/migrations/0004_novel_closures.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    )
+    .run();
   const c = client(mf);
   await c.call("/api/session");
   const { id } = await (await c.call("/api/novels", payload())).json();
@@ -548,4 +581,88 @@ test("D1 v2 migration preserves old colliding titles, rebuilds keys and prevents
     db.batch(titleKeyStatements([]).map((s) => db.prepare(s))),
   );
   assert.equal((await store.titleAvailability("ABC")).available, false);
+});
+
+test("D1 concurrent publishing respects global cap for admins and guests, releases slots and preserves retries", async (t) => {
+  const { db } = await fixture(t);
+  const store = new D1Store(db, { maxActiveNovels: 1 });
+  const requests = [
+    ["一", randomUUID(), randomUUID()],
+    ["二", randomUUID(), randomUUID()],
+  ];
+  const results = await Promise.allSettled(
+    requests.map(([title, p, key]) =>
+      store.publish(title, 4000, p, key, "あ", true),
+    ),
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(results.find((r) => r.status === "rejected").reason.status, 409);
+  const winner = results.findIndex((r) => r.status === "fulfilled"),
+    [title, p, key] = requests[winner],
+    { id } = results[winner].value;
+  assert.deepEqual(await store.publish(title, 4000, p, key, "あ", true), {
+    id,
+  });
+  await assert.rejects(
+    store.publish("三", 4000, randomUUID(), randomUUID(), "あ"),
+    (e) => e.status === 409 && e.creation.activeCount === 1,
+  );
+  assert.equal(
+    (await db.prepare("SELECT count(*) n FROM creations").first()).n,
+    1,
+  );
+  assert.equal(
+    (await db.prepare("SELECT count(*) n FROM participants").first()).n,
+    1,
+  );
+  assert.equal(
+    (await db.prepare("SELECT count(*) n FROM batch_guard").first()).n,
+    0,
+  );
+  for (let i = 0; i < 9; i++)
+    await store.post(id, p, randomUUID(), "あ".repeat(400), true);
+  await store.post(id, p, randomUUID(), "あ".repeat(399), true);
+  assert.equal((await store.creationStatus(p, true)).activeCount, 0);
+  const next = (
+    await store.publish("三", 4000, randomUUID(), randomUUID(), "あ")
+  ).id;
+  await store.delete(next, true);
+  assert.equal((await store.creationStatus(p, true)).canCreate, true);
+});
+
+test("D1 admin finish API preserves body and appears in completed shelf; posting race is atomic", async (t) => {
+  const { mf, store, db } = await fixture(t),
+    c = client(mf),
+    p = randomUUID(),
+    key = randomUUID();
+  const { id } = await store.publish("終了", 4000, p, key, "文");
+  assert.equal((await c.call("/api/novels/" + id + "/finish", {})).status, 403);
+  await c.call("/api/admin", { password });
+  const results = await Promise.allSettled([
+    store.post(id, randomUUID(), randomUUID(), "続"),
+    c.call("/api/novels/" + id + "/finish", {}),
+  ]);
+  assert.equal(results[1].value.status, 200);
+  const book = await store.get(id, p);
+  assert.equal(book.closed, 1);
+  assert.equal(book.count, results[0].status === "fulfilled" ? 2 : 1);
+  assert.equal(book.revision, book.posts.length);
+  for (const admin of [false, true])
+    await assert.rejects(
+      store.post(id, randomUUID(), randomUUID(), "追加", admin),
+      err(409),
+    );
+  assert.equal((await store.post(id, p, key, "文")).sequence, 1);
+  assert.equal((await store.listPage({ filter: "complete" })).books[0].id, id);
+  assert.equal((await store.listPage({ filter: "writing" })).books.length, 0);
+  assert.equal((await store.creationStatus(p, true)).activeCount, 0);
+  const delta = await store.get(id, p, book.revision);
+  assert.equal(delta.closed, 1);
+  assert.deepEqual(delta.posts, []);
+  await store.finish(id, true);
+  await store.delete(id, true);
+  assert.equal(
+    (await db.prepare("SELECT count(*) n FROM novel_closures").first()).n,
+    0,
+  );
 });

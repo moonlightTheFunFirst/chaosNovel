@@ -1,3 +1,4 @@
+import { activeNovelLimit, activeLimitMessage } from "../active-novels.js";
 import { Buffer } from "node:buffer";
 import { AppError } from "../app-error.js";
 import { normalize, split, inspectInput, titleKey } from "../public/text.js";
@@ -15,9 +16,10 @@ function manuscript(key, text) {
   return normalize(text);
 }
 export class D1Store {
-  constructor(db, { now = Date.now } = {}) {
+  constructor(db, { now = Date.now, maxActiveNovels = 30 } = {}) {
     this.db = db;
     this.now = now;
+    this.maxActiveNovels = activeNovelLimit(maxActiveNovels);
   }
   sql(query, ...args) {
     return this.db.prepare(query).bind(...args);
@@ -29,8 +31,17 @@ export class D1Store {
     ).first();
     const time = this.now(),
       next = row?.next_allowed_at;
+    const activeCount = (
+      await this.sql(
+        "SELECT count(*) AS n FROM novels WHERE count<capacity AND id NOT IN (SELECT novel_id FROM novel_closures)",
+      ).first()
+    ).n;
+    const activeLimitReached = activeCount >= this.maxActiveNovels;
     return {
-      canCreate: admin || !next || time >= next,
+      activeCount,
+      maxActiveNovels: this.maxActiveNovels,
+      activeLimitReached,
+      canCreate: !activeLimitReached && (admin || !next || time >= next),
       nextCreationAt: admin || !next ? null : new Date(next).toISOString(),
       serverTime: time,
     };
@@ -49,7 +60,10 @@ export class D1Store {
     if (after !== null && (!Number.isSafeInteger(after) || after < 0))
       throw new AppError("不正なrevisionです。");
     const [book, posts, own] = await this.db.batch([
-      this.sql("SELECT * FROM novels WHERE id=?", id),
+      this.sql(
+        "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels WHERE id=?",
+        id,
+      ),
       this.sql(
         "SELECT sequence,published,count FROM posts WHERE novel_id=? AND sequence>? ORDER BY sequence",
         id,
@@ -79,7 +93,10 @@ export class D1Store {
     const parts = split(text);
     for (let attempt = 0; attempt < 3; attempt++) {
       const [books, previous, own] = await this.db.batch([
-        this.sql("SELECT * FROM novels WHERE id=?", id),
+        this.sql(
+          "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels WHERE id=?",
+          id,
+        ),
         this.sql(
           "SELECT original,result FROM posts WHERE novel_id=? AND participant_id=? AND request_key=?",
           id,
@@ -102,7 +119,7 @@ export class D1Store {
       if (!book) throw new AppError("この本は見つかりません。", 404);
       if (!admin && own.results.length)
         throw new AppError("この本にはすでに投稿しています。", 409);
-      if (book.count === book.capacity)
+      if (book.closed || book.count === book.capacity)
         throw new AppError(
           "この本は完結しました。原稿はコピーして残せます。",
           409,
@@ -122,7 +139,7 @@ export class D1Store {
       try {
         await this.db.batch([
           this.sql(
-            "INSERT INTO batch_guard VALUES (?, EXISTS(SELECT 1 FROM novels WHERE id=? AND revision=?))",
+            "INSERT INTO batch_guard VALUES (?, EXISTS(SELECT 1 FROM novels WHERE id=? AND revision=? AND id NOT IN (SELECT novel_id FROM novel_closures)))",
             guard,
             id,
             book.revision,
@@ -188,8 +205,10 @@ export class D1Store {
       const permission = await this.creationStatus(p, admin);
       if (!permission.canCreate) {
         const e = new AppError(
-          "新しい本は7日間に一冊まで公開できます。下書きは保存されています。",
-          429,
+          permission.activeLimitReached
+            ? activeLimitMessage
+            : "新しい本は7日間に一冊まで公開できます。下書きは保存されています。",
+          permission.activeLimitReached ? 409 : 429,
         );
         e.creation = permission;
         throw e;
@@ -210,6 +229,11 @@ export class D1Store {
         complete: false,
       };
       const statements = [
+        this.sql(
+          "INSERT INTO batch_guard VALUES (?, (SELECT count(*) FROM novels WHERE count<capacity AND id NOT IN (SELECT novel_id FROM novel_closures)) < ?)",
+          guard + "-active",
+          this.maxActiveNovels,
+        ),
         this.sql(
           "INSERT INTO batch_guard VALUES (?, ? OR NOT EXISTS(SELECT 1 FROM creation_limits WHERE participant_id=? AND next_allowed_at>?))",
           guard,
@@ -250,7 +274,13 @@ export class D1Store {
             time + 604800000,
           ),
         );
-      statements.push(this.sql("DELETE FROM batch_guard WHERE id=?", guard));
+      statements.push(
+        this.sql(
+          "DELETE FROM batch_guard WHERE id IN (?,?)",
+          guard,
+          guard + "-active",
+        ),
+      );
       try {
         await this.db.batch(statements);
         return { id };
@@ -262,6 +292,26 @@ export class D1Store {
       "公開が集中しています。同じ内容を再送してください。",
       503,
     );
+  }
+  async finish(id, admin = false) {
+    if (!admin) throw new AppError("執筆終了は管理者のみ利用できます。", 403);
+    const results = await this.db.batch([
+      this.sql(
+        "INSERT OR IGNORE INTO novel_closures SELECT id,? FROM novels WHERE id=? AND count<capacity",
+        new Date(this.now()).toISOString(),
+        id,
+      ),
+      this.sql(
+        "UPDATE novels SET updated_at=(SELECT closed_at FROM novel_closures WHERE novel_id=?) WHERE id=? AND EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=?)",
+        id,
+        id,
+        id,
+      ),
+      this.sql("SELECT id FROM novels WHERE id=?", id),
+    ]);
+    if (!results[2].results.length)
+      throw new AppError("この本は見つかりません。", 404);
+    return { finished: true };
   }
   async delete(id, admin = false) {
     if (!admin) throw new AppError("本の削除は管理者のみ利用できます。", 403);
@@ -297,7 +347,9 @@ export class D1Store {
       params = [];
     if (filter !== "all")
       conditions.push(
-        filter === "writing" ? "count<capacity" : "count=capacity",
+        filter === "writing"
+          ? "(count<capacity AND id NOT IN (SELECT novel_id FROM novel_closures))"
+          : "(count=capacity OR id IN (SELECT novel_id FROM novel_closures))",
       );
     if (cursor) {
       let data;
@@ -333,7 +385,7 @@ export class D1Store {
     const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
     const page = await this.db
       .prepare(
-        "SELECT * FROM novels" +
+        "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels" +
           where +
           " ORDER BY " +
           field +

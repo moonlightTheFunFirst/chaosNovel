@@ -72,7 +72,7 @@ export function openCreation({
     permission = value;
     allowedAt =
       performance.now() +
-      (value.canCreate
+      (!value.nextCreationAt
         ? 0
         : Math.max(0, Date.parse(value.nextCreationAt) - value.serverTime));
   }
@@ -87,7 +87,7 @@ export function openCreation({
     }
     update();
   }
-  const refresh = button("公開可能日時を再確認", refreshPermission);
+  const refresh = button("公開条件を再確認", refreshPermission);
   const counter = el("p");
   const controls = el("div", undefined, "actions");
   const back = button("タイトルと長さに戻る", () => {
@@ -115,21 +115,27 @@ export function openCreation({
       sending ||
       !!pending ||
       performance.now() < allowedAt ||
+      !!permission?.activeLimitReached ||
       !input.valid;
     retry.hidden = !pending;
     retry.disabled = sending;
     title.disabled = length.disabled = draft.readOnly = !!pending || sending;
     back.disabled = sending;
     refresh.hidden =
-      permission?.admin || (permission && performance.now() >= allowedAt);
+      permission &&
+      !permission.activeLimitReached &&
+      performance.now() >= allowedAt;
     if (permission)
-      formLimit.textContent = editorLimit.textContent = permission.admin
-        ? "管理者モード：作成回数の制限はありません。"
-        : performance.now() >= allowedAt
-          ? "新しい本を公開できます。公開後7日間は次の本を公開できません。"
-          : "次に公開できる日時：" +
-            formatDate(permission.nextCreationAt) +
-            "（日本時間）。下書きは書けます。";
+      formLimit.textContent = editorLimit.textContent =
+        permission.activeLimitReached
+          ? `執筆中の本：${permission.activeCount}／${permission.maxActiveNovels}冊。新しい本を公開するには、いずれかの本を完結させてください。下書きは書けます。`
+          : permission.admin
+            ? "管理者モード：7日間の制限はありません（全体の執筆中冊数の上限は適用）。"
+            : performance.now() >= allowedAt
+              ? "新しい本を公開できます。公開後7日間は次の本を公開できません。"
+              : "次に公開できる日時：" +
+                formatDate(permission.nextCreationAt) +
+                "（日本時間）。下書きは書けます。";
   }
   draft.oncompositionstart = () => {
     composing = true;

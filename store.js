@@ -1,3 +1,4 @@
+import { activeNovelLimit, activeLimitMessage } from "./active-novels.js";
 import { AppError } from "./app-error.js";
 import { migrateTitleKeys } from "./migrations/title-keys.js";
 import { DatabaseSync } from "node:sqlite";
@@ -13,8 +14,9 @@ import {
 
 export { AppError } from "./app-error.js";
 export class Store {
-  constructor(path, { now = Date.now } = {}) {
+  constructor(path, { now = Date.now, maxActiveNovels = 30 } = {}) {
     this.now = now;
+    this.maxActiveNovels = activeNovelLimit(maxActiveNovels);
     this.db = new DatabaseSync(path);
     const version = this.db.prepare("PRAGMA user_version").get().user_version;
     if (version === 1)
@@ -44,8 +46,18 @@ export class Store {
         "SELECT next_allowed_at FROM creation_limits WHERE participant_id=?",
       )
       .get(participant)?.next_allowed_at;
+    const activeCount = this.db
+      .prepare(
+        "SELECT count(*) AS n FROM novels WHERE count<capacity AND id NOT IN (SELECT novel_id FROM novel_closures)",
+      )
+      .get().n;
+    const activeLimitReached = activeCount >= this.maxActiveNovels;
     return {
-      canCreate: isAdmin || !next || serverTime >= next,
+      activeCount,
+      maxActiveNovels: this.maxActiveNovels,
+      activeLimitReached,
+      canCreate:
+        !activeLimitReached && (isAdmin || !next || serverTime >= next),
       nextCreationAt: isAdmin || !next ? null : new Date(next).toISOString(),
       serverTime,
     };
@@ -80,8 +92,10 @@ export class Store {
       const permission = this.creationStatus(participant, isAdmin);
       if (!permission.canCreate) {
         const error = new AppError(
-          "新しい本は7日間に一冊まで公開できます。下書きは保存されています。",
-          429,
+          permission.activeLimitReached
+            ? activeLimitMessage
+            : "新しい本は7日間に一冊まで公開できます。下書きは保存されています。",
+          permission.activeLimitReached ? 409 : 429,
         );
         error.creation = permission;
         throw error;
@@ -192,7 +206,9 @@ export class Store {
       params = [];
     if (filter !== "all")
       conditions.push(
-        filter === "writing" ? "count<capacity" : "count=capacity",
+        filter === "writing"
+          ? "(count<capacity AND id NOT IN (SELECT novel_id FROM novel_closures))"
+          : "(count=capacity OR id IN (SELECT novel_id FROM novel_closures))",
       );
     if (cursor) {
       let data;
@@ -228,7 +244,7 @@ export class Store {
     const where = conditions.length ? " WHERE " + conditions.join(" AND ") : "";
     const rows = this.db
       .prepare(
-        "SELECT * FROM novels" +
+        "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels" +
           where +
           " ORDER BY " +
           field +
@@ -252,7 +268,11 @@ export class Store {
       throw new AppError("不正なrevisionです。");
     this.db.exec("SAVEPOINT reading");
     try {
-      const novel = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
+      const novel = this.db
+        .prepare(
+          "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels WHERE id=?",
+        )
+        .get(id);
       if (!novel) throw new AppError("この本は見つかりません。", 404);
       const own = this.db
         .prepare(
@@ -275,6 +295,29 @@ export class Store {
       };
     } finally {
       this.db.exec("RELEASE reading");
+    }
+  }
+  finish(id, isAdmin = false) {
+    if (!isAdmin) throw new AppError("執筆終了は管理者のみ利用できます。", 403);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const book = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
+      if (!book) throw new AppError("この本は見つかりません。", 404);
+      const date = new Date(this.now()).toISOString();
+      if (book.count < book.capacity) {
+        const inserted = this.db
+          .prepare("INSERT OR IGNORE INTO novel_closures VALUES (?,?)")
+          .run(id, date);
+        if (inserted.changes)
+          this.db
+            .prepare("UPDATE novels SET updated_at=? WHERE id=?")
+            .run(date, id);
+      }
+      this.db.exec("COMMIT");
+      return { finished: true };
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
     }
   }
   delete(id, isAdmin = false) {
@@ -318,7 +361,11 @@ export class Store {
         this.db.exec(nested ? "RELEASE posting" : "COMMIT");
         return JSON.parse(previous.result);
       }
-      const novel = this.db.prepare("SELECT * FROM novels WHERE id=?").get(id);
+      const novel = this.db
+        .prepare(
+          "SELECT *, EXISTS(SELECT 1 FROM novel_closures WHERE novel_id=novels.id) AS closed FROM novels WHERE id=?",
+        )
+        .get(id);
       if (!novel) throw new AppError("この本は見つかりません。", 404);
       if (
         !isAdmin &&
@@ -327,7 +374,7 @@ export class Store {
           .get(id, participant)
       )
         throw new AppError("この本にはすでに投稿しています。", 409);
-      if (novel.count === novel.capacity)
+      if (novel.closed || novel.count === novel.capacity)
         throw new AppError(
           "この本は完結しました。原稿はコピーして残せます。",
           409,

@@ -34,7 +34,10 @@ export function retryAfterMs(value, now = Date.now()) {
 export function visiblePolling(
   doc,
   poll,
-  timers = { setTimeout, clearTimeout },
+  timers = {
+    setTimeout: (...args) => globalThis.setTimeout(...args),
+    clearTimeout: (...args) => globalThis.clearTimeout(...args),
+  },
   options = {},
 ) {
   const now = options.now || Date.now;

@@ -13,6 +13,7 @@
   "vars": {
     "PUBLIC_ORIGIN": "https://replace-before-publishing.invalid",
     "COOKIE_SECURE": "1",
+    "MAX_ACTIVE_NOVELS": "30",
   },
   "d1_databases": [
     {
@@ -29,6 +30,7 @@
         "PUBLIC_ORIGIN": "http://127.0.0.1:8787",
         "COOKIE_SECURE": "0",
         "LOCAL_DEV": "1",
+        "MAX_ACTIVE_NOVELS": "30",
       },
       "d1_databases": [
         {

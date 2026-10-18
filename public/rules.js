@@ -64,7 +64,7 @@ export function showRules(app, el, isAdmin) {
     intro.append(
       el(
         "p",
-        "現在は管理者モードのため、投稿・作成回数の制限はありません。",
+        "管理者は一冊への投稿回数・7日間の作成制限が免除されます。執筆中の本の全体上限は管理者にも適用されます。",
         "admin-rule-note",
       ),
     );

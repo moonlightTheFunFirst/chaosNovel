@@ -35,3 +35,8 @@ CREATE TABLE IF NOT EXISTS creation_limits (
 
 CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS admin_epochs (participant_id TEXT PRIMARY KEY, epoch INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS novels_active ON novels(id) WHERE count < capacity;
+CREATE TABLE IF NOT EXISTS novel_closures (
+ novel_id TEXT PRIMARY KEY REFERENCES novels(id) ON DELETE CASCADE,
+ closed_at TEXT NOT NULL
+);

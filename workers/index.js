@@ -98,7 +98,9 @@ export default {
           response.headers.set(k, v);
         return response;
       }
-      const store = new D1Store(env.DB),
+      const store = new D1Store(env.DB, {
+          maxActiveNovels: env.MAX_ACTIVE_NOVELS ?? 30,
+        }),
         identity = workerIdentity(store, env.COOKIE_SECRET, {
           password: env.ADMIN_PASSWORD,
         });
@@ -122,7 +124,7 @@ export default {
       let result;
       const path = url.pathname,
         method = request.method,
-        match = path.match(/^\/api\/novels\/([\w-]+)(\/posts)?$/);
+        match = path.match(/^\/api\/novels\/([\w-]+)(\/posts|\/finish)?$/);
       if (path === "/api/session" && method === "GET")
         result = {
           isAdmin: admin,
@@ -167,6 +169,8 @@ export default {
             ? Number(url.searchParams.get("after"))
             : null,
         );
+      else if (match?.[2] === "/finish" && method === "POST")
+        result = await store.finish(match[1], admin);
       else if (match && !match[2] && method === "DELETE")
         result = await store.delete(match[1], admin);
       else if (match?.[2] && method === "POST")

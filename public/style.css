@@ -10,11 +10,17 @@
   background: var(--paper);
 }
 .book-card {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  row-gap: 12px;
 }
 .book-card .book {
-  flex: 1;
+  grid-row: 1;
+}
+.book-card .delete-book {
+  margin-top: 0;
+  justify-self: end;
 }
 .delete-book {
   margin-top: 12px;
@@ -237,7 +243,7 @@ form {
   min-height: 245px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 .book:hover {
   border-color: #a9997c;
@@ -450,4 +456,92 @@ dialog::backdrop {
   color: var(--muted);
   opacity: 1;
   cursor: not-allowed;
+}
+
+.create-book-control {
+  position: relative;
+  display: inline-flex;
+}
+.create-book-control:has(button:disabled) {
+  cursor: not-allowed;
+}
+.create-book-control button:disabled {
+  background: var(--line);
+  color: var(--muted);
+  border-color: var(--line);
+  opacity: 1;
+  pointer-events: none;
+}
+.create-book-control:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+.create-book-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10;
+  width: min(20rem, 80vw);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  box-shadow: 0 3px 10px #0002;
+}
+.create-book-control:hover .create-book-tooltip:not([hidden]),
+.create-book-control:focus-within .create-book-tooltip:not([hidden]) {
+  display: block;
+}
+
+.book-length {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+.book-status {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.12em;
+  color: var(--red);
+}
+.book > .book-status {
+  margin-top: 8px;
+}
+.book > div:last-child {
+  margin-top: auto;
+}
+.book-finished {
+  background: var(--paper);
+  border-left: 5px solid var(--line);
+}
+.book-finished .book-status,
+.is-finished .book-status {
+  color: var(--ink);
+}
+.book-finish-reason {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.book-total {
+  font-size: 18px;
+  margin: 8px 0;
+}
+.book-remaining {
+  font-size: 14px;
+  color: var(--red);
+  margin: 8px 0;
+}
+.book-open {
+  display: block;
+  margin: 16px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
 }

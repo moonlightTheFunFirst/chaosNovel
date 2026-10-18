@@ -1,3 +1,9 @@
+import {
+  isFinished,
+  bookStatus,
+  finishReason,
+  applyClosure,
+} from "./book-state.js";
 import { mergeDelta, visiblePolling, refreshAfterSuccess } from "./sync.js";
 import { formatDate } from "./book-meta.js";
 import { count, split, normalize, inspectInput } from "./text.js";
@@ -15,6 +21,7 @@ export async function openReadingRoom(id, helpers) {
     button,
     isAdmin,
     deleteBook,
+    finishBook,
     storageGet,
     storageSet,
     storageRemove,
@@ -38,7 +45,7 @@ export async function openReadingRoom(id, helpers) {
   document.body.classList.add("reading-room");
   document.title = book.title + " — カオス小説";
   app.innerHTML = `<section class="reading-shell" aria-label="小説の閲覧と執筆">
-    <div class="reading-top"><a href="/" class="back">本棚へ</a><h1 id="reading-title"></h1><details class="book-menu"><summary aria-label="本のメニュー">メニュー</summary><div id="book-menu-items"><p id="book-meta" class="meta"></p></div></details></div>
+    <div class="reading-top"><a href="/" class="back">本棚へ</a><div class="reading-title-block"><h1 id="reading-title"></h1><span id="reading-state" class="book-status"></span><span id="reading-finish-reason"></span></div><details class="book-menu"><summary aria-label="本のメニュー">メニュー</summary><div id="book-menu-items"><p id="book-meta" class="meta"></p></div></details></div>
     <div class="reading-announcement"><span id="reading-notice" aria-live="polite"></span><span id="reading-message" role="status"></span></div>
     <div class="reading-stage"><button class="page-turn turn-next" aria-label="次のページ">〈</button><article class="novel-sheet"><span id="mode-label" class="sheet-label">本文</span><div id="page-viewport" tabindex="0" aria-label="小説の本文"><div id="page-flow"></div></div><textarea id="manuscript" aria-label="原稿（縦書き・1〜400字）" aria-describedby="writing-rules" placeholder="ここから、あなたの一節を。" spellcheck="false" hidden></textarea><span id="sheet-number" class="sheet-number"></span></article><button class="page-turn turn-previous" aria-label="前のページ">〉</button></div>
     <div class="reading-controls"><div class="page-navigation"><span>末尾</span><input id="page-slider" type="range" min="1" max="1" value="1" step="1" dir="rtl" aria-label="ページを移動"><span>先頭</span><output id="page-position" aria-live="polite"></output></div><div class="reading-actions"><span id="reading-hint"></span><div id="mode-actions" class="actions"></div></div><p id="writing-rules" aria-hidden="true">一回1〜400字。空白・改行も1字。残り文字数を超える部分は掲載されません。Enterは改行です。</p></div>
@@ -67,6 +74,20 @@ export async function openReadingRoom(id, helpers) {
       button("この本を削除", () => deleteBook(book), "danger"),
     );
   }
+  const finishButton = button(
+    "執筆を終了",
+    () =>
+      finishBook(book, () => {
+        book.closed = 1;
+        if (newer) newer.closed = 1;
+        message.textContent =
+          "管理者により執筆を終了しました。本文と原稿は保持されています。";
+        update();
+        stopPolling?.reconcile();
+      }),
+    "danger",
+  );
+  if (isAdmin) menu.append(finishButton);
   draft.value = storageGet(draftKey) ?? pending?.text ?? "";
   const pager = new PagedText(viewport, flow);
   const writeButton = button("次の一節を綴る", () => setMode(true), "primary");
@@ -97,8 +118,7 @@ export async function openReadingRoom(id, helpers) {
       retryButton,
       submitButton,
     );
-  const canPost = () =>
-    !deleted && book.count < book.capacity && (isAdmin || !book.own);
+  const canPost = () => !deleted && !isFinished(book) && (isAdmin || !book.own);
 
   function renderText(anchor = 0) {
     flow.textContent = book.posts.map((p) => p.published).join("");
@@ -171,9 +191,15 @@ export async function openReadingRoom(id, helpers) {
     previous.disabled = current <= 0;
   }
   function updateActions() {
+    const finished = isFinished(book);
+    finishButton.hidden = finished;
+    app.classList.toggle("is-finished", finished);
+    document.querySelector("#reading-state").textContent = bookStatus(book);
+    document.querySelector("#reading-finish-reason").textContent =
+      finishReason(book);
     const input = inspectInput(draft.value);
     const n = input.count;
-    writeButton.hidden = writing;
+    writeButton.hidden = writing || finished;
     writeButton.disabled = !gate.unlocked || !canPost();
     writeButton.title = !gate.unlocked
       ? "最後のページまで進むと執筆できます。"
@@ -185,7 +211,7 @@ export async function openReadingRoom(id, helpers) {
     receiptButton.hidden = !book.own;
     retryButton.hidden = !writing || !pending;
     retryButton.disabled = sending;
-    submitButton.hidden = !writing;
+    submitButton.hidden = !writing || finished;
     submitButton.disabled =
       !gate.unlocked ||
       !canPost() ||
@@ -196,13 +222,17 @@ export async function openReadingRoom(id, helpers) {
     if (!composing)
       draft.readOnly = sending || !!pending || !canPost() || !gate.unlocked;
     document.querySelector("#reading-hint").textContent = writing
-      ? input.count === null
-        ? input.error
-        : `原稿 ${n} / 400字　残り ${book.capacity - book.count}字`
+      ? finished
+        ? `保存した原稿 ${n ?? "—"}字（閲覧・コピーできます）`
+        : input.count === null
+          ? input.error
+          : `原稿 ${n} / 400字　残り ${book.capacity - book.count}字`
       : deleted
         ? "この本は削除されました。"
-        : book.count === book.capacity
-          ? "完結した物語です。"
+        : isFinished(book)
+          ? book.closed
+            ? "管理者により執筆を終了しました。"
+            : `全${book.count.toLocaleString()}字。ページをめくってお楽しみください。`
           : !canPost()
             ? "この本には投稿済みです。"
             : gate.unlocked
@@ -216,7 +246,7 @@ export async function openReadingRoom(id, helpers) {
       " ／ 更新 " +
       formatDate(book.updated_at);
     document.querySelector("#book-meta").textContent =
-      `${book.count.toLocaleString()} / ${book.capacity.toLocaleString()}字 ・ ${book.count === book.capacity ? "完結" : "執筆中"}`;
+      `${book.count.toLocaleString()} / ${book.capacity.toLocaleString()}字 ・ ${bookStatus(book)}`;
     updateNavigation();
     updateActions();
   }
@@ -442,6 +472,11 @@ export async function openReadingRoom(id, helpers) {
         latest = await api("/novels/" + id);
       }
       if (latest.revision < book.revision) return;
+      const closedNow = applyClosure(book, latest);
+      if (newer) applyClosure(newer, latest);
+      if (closedNow)
+        message.textContent =
+          "管理者により執筆を終了しました。原稿は保持しています。";
       if (latest.own && latest.own.sequence >= (book.own?.sequence ?? 0)) {
         book.own = latest.own;
         if (pending && latest.own.requestKey === pending.key) {
@@ -457,7 +492,7 @@ export async function openReadingRoom(id, helpers) {
         notice.replaceChildren(
           el(
             "span",
-            latest.count === latest.capacity
+            isFinished(latest)
               ? "完結しました。 "
               : "新しい一節が届きました。 ",
           ),
@@ -471,7 +506,7 @@ export async function openReadingRoom(id, helpers) {
         );
       }
       if (!composing) update();
-      return { updated: latest.revision > base.revision };
+      return { updated: closedNow || latest.revision > base.revision };
     } catch (error) {
       if (error.status === 404) {
         deleted = true;
@@ -484,7 +519,7 @@ export async function openReadingRoom(id, helpers) {
     }
   }
   stopPolling = visiblePolling(document, poll, undefined, {
-    eligible: () => !deleted && (book.count < book.capacity || !!pending),
+    eligible: () => !deleted && (!isFinished(book) || !!pending),
     onPause: (paused) => {
       pollingStatus.textContent = paused ? "更新の確認を止めています" : "";
     },

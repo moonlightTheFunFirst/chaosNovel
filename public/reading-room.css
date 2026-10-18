@@ -502,3 +502,55 @@ body.creation-writing {
     height: max(100px, calc(100dvh - 390px));
   }
 }
+
+.reading-shell {
+  grid-template-rows: 78px 30px minmax(0, 1fr) auto;
+}
+.reading-title-block {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.reading-title-block .book-status {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 18px;
+}
+#reading-finish-reason {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.is-finished:not(.is-writing) .reading-actions {
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 10px;
+}
+.is-finished:not(.is-writing) #mode-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.is-finished #reading-hint {
+  font-size: 13px;
+  text-align: center;
+}
+.is-finished #writing-rules {
+  display: none;
+}
+.is-finished .page-navigation {
+  max-width: 760px;
+  margin-inline: auto;
+}
+@media (max-width: 620px) {
+  .reading-shell {
+    grid-template-rows: 88px 28px minmax(0, 1fr) auto;
+  }
+  .reading-title-block .book-status {
+    display: block;
+    margin-right: 0;
+  }
+  #reading-finish-reason {
+    font-size: 11px;
+  }
+}

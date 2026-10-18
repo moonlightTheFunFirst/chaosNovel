@@ -160,3 +160,24 @@ test("activity during in-flight poll resets next interval without overlap", asyn
   assert.equal(h.wait, 3000);
   h.stop();
 });
+
+test("default polling timers retain the browser global receiver", () => {
+  const originalSet = globalThis.setTimeout,
+    originalClear = globalThis.clearTimeout;
+  try {
+    globalThis.setTimeout = function () {
+      assert.equal(this, globalThis);
+      return 1;
+    };
+    globalThis.clearTimeout = function () {
+      assert.equal(this, globalThis);
+    };
+    const doc = new EventTarget();
+    doc.hidden = false;
+    const stop = visiblePolling(doc, async () => ({ updated: false }));
+    stop();
+  } finally {
+    globalThis.setTimeout = originalSet;
+    globalThis.clearTimeout = originalClear;
+  }
+});

@@ -1,3 +1,4 @@
+import { isFinished, bookStatus, finishReason } from "./book-state.js";
 import { retryAfterMs } from "./sync.js";
 import { showRules } from "./rules.js";
 import { openCreation } from "./creation.js";
@@ -104,17 +105,53 @@ function deleteBook(book) {
   document.body.append(dialog);
   dialog.showModal();
 }
+function finishBook(book, onFinished = () => location.reload()) {
+  const dialog = el("dialog"),
+    error = el("p", "", "message");
+  const confirm = button(
+    "執筆を終了する",
+    async () => {
+      confirm.disabled = true;
+      try {
+        await api("/novels/" + book.id + "/finish", {});
+        dialog.close();
+        onFinished();
+      } catch (e) {
+        error.textContent = e.message;
+        confirm.disabled = false;
+      }
+    },
+    "danger",
+  );
+  dialog.append(
+    el("h2", "この本の執筆を終了しますか。"),
+    el("p", book.title),
+    el(
+      "p",
+      "本文と文字数を残して投稿受付を終了します。管理者も追加投稿できなくなります。元には戻せません。",
+      "note",
+    ),
+    button("キャンセル", () => dialog.close()),
+    confirm,
+    error,
+  );
+  dialog.onclose = () => dialog.remove();
+  document.body.append(dialog);
+  dialog.showModal();
+}
 async function shelf() {
   app.innerHTML =
     '<section class="hero"><div><div class="eyebrow">A STORY WITHOUT A PLAN</div><h1><span>一度きりの</span><span>一節を。</span><br><span>予想できない</span><span>一冊に。</span></h1><p>知らない誰かの続きに、あなたの言葉を。<br>結末も、つながりも、気にしなくていい。</p></div><div class="hero-mark">見た目は小説。<br>中身は、カオス。</div></section><div class="toolbar"><h2>みんなの本棚</h2><div class="actions" id="shelf-actions"></div></div><div class="shelf" id="shelf"></div>';
   showRules(app, el, isAdmin);
+  const capacityNote = el("p", "執筆中の冊数を確認しています…", "note");
+  document.querySelector(".toolbar").after(capacityNote);
   const actions = document.querySelector("#shelf-actions");
   const filter = el("select");
   filter.setAttribute("aria-label", "本の状態");
   for (const [value, label] of [
     ["all", "すべての本"],
     ["writing", "執筆中"],
-    ["complete", "完結"],
+    ["complete", "執筆終了"],
   ]) {
     const option = el("option", label);
     option.value = value;
@@ -140,11 +177,32 @@ async function shelf() {
     storageSet("shelf-sort", sort.value);
     load(true);
   };
-  actions.append(
-    filter,
-    sort,
-    button("＋ 新しい本をつくる", createForm, "primary"),
+  const createButton = button(
+    "＋ 新しい本をつくる",
+    () => {
+      if (!createButton.disabled) createForm();
+    },
+    "primary",
   );
+  const createControl = el("span", undefined, "create-book-control");
+  const createTooltip = el("span", "", "create-book-tooltip");
+  createTooltip.id = "create-book-tooltip";
+  createTooltip.setAttribute("role", "tooltip");
+  createButton.setAttribute("aria-describedby", createTooltip.id);
+  createControl.setAttribute("aria-describedby", createTooltip.id);
+  createControl.append(createButton, createTooltip);
+  function creationAvailability(reason = "") {
+    createButton.disabled = !!reason;
+    createControl.tabIndex = reason ? 0 : -1;
+    createControl.setAttribute(
+      "aria-label",
+      reason ? "新しい本をつくる（現在利用できません）" : "新しい本をつくる",
+    );
+    createTooltip.textContent = reason;
+    createTooltip.hidden = !reason;
+  }
+  creationAvailability("執筆中の冊数を確認しています。");
+  actions.append(filter, sort, createControl);
   app.append(message);
   let books = [],
     generation = 0,
@@ -158,7 +216,22 @@ async function shelf() {
       cursor = null;
     }
     more.disabled = true;
+    let capacityChecked = false;
     try {
+      const session = await api("/session");
+      if (ticket !== generation || !app.contains(more)) return;
+      capacityChecked = true;
+      const c = session.creation;
+      creationAvailability(
+        c.activeLimitReached
+          ? "これ以上本を作成できません。先に他の本の執筆を完了させてください。"
+          : "",
+      );
+      capacityNote.textContent =
+        `執筆中の本：${c.activeCount}／${c.maxActiveNovels}冊` +
+        (c.activeLimitReached
+          ? "。新しい本を公開するには、いずれかの本を完結させてください。下書きは書けます。"
+          : "");
       const batch = await api(
         "/novels?" +
           new URLSearchParams({
@@ -175,6 +248,11 @@ async function shelf() {
       more.hidden = !cursor;
       render();
     } catch (e) {
+      if (ticket !== generation || !app.contains(more)) return;
+      if (!capacityChecked)
+        creationAvailability(
+          "冊数を確認できません。本棚を再読み込みしてください。",
+        );
       message.textContent = e.message;
     } finally {
       if (ticket === generation) more.disabled = false;
@@ -184,29 +262,48 @@ async function shelf() {
     const list = document.querySelector("#shelf");
     list.replaceChildren();
     for (const book of books) {
-      const a = el("a", undefined, "book");
+      const finished = isFinished(book);
+      const a = el("a", undefined, finished ? "book book-finished" : "book");
       a.href = "/novels/" + book.id;
       a.append(
-        el(
-          "span",
-          `${labels[book.capacity]}　・　${book.count === book.capacity ? "完結" : "執筆中"}`,
-          "badge",
-        ),
+        el("span", labels[book.capacity], "book-length"),
+        el("strong", bookStatus(book), "book-status"),
         el("h2", book.title),
       );
       const bottom = el("div");
-      const progress = el("progress");
-      progress.max = book.capacity;
-      progress.value = book.count;
-      progress.setAttribute("aria-label", "本文の文字数");
-      const track = el("div", undefined, "progress");
-      track.append(progress);
+      if (finished) {
+        bottom.append(
+          el("p", finishReason(book), "book-finish-reason"),
+          el("p", `全${book.count.toLocaleString()}字`, "book-total"),
+        );
+      } else {
+        const progress = el("progress");
+        progress.max = book.capacity;
+        progress.value = book.count;
+        progress.setAttribute("aria-label", "本文の文字数");
+        const track = el("div", undefined, "progress");
+        track.append(progress);
+        bottom.append(
+          track,
+          el(
+            "div",
+            `${book.count.toLocaleString()} / ${book.capacity.toLocaleString()} 字`,
+            "meta",
+          ),
+        );
+        bottom.append(
+          el(
+            "p",
+            `残り${(book.capacity - book.count).toLocaleString()}字`,
+            "book-remaining",
+          ),
+        );
+      }
       bottom.append(
-        track,
         el(
-          "div",
-          `${book.count.toLocaleString()} / ${book.capacity.toLocaleString()} 字`,
-          "meta",
+          "span",
+          finished ? "この本を読む →" : "続きを読む・書く →",
+          "book-open",
         ),
       );
       bottom.append(
@@ -219,6 +316,14 @@ async function shelf() {
       if (isAdmin)
         card.append(
           button("この本を削除", () => deleteBook(book), "delete-book"),
+        );
+      if (isAdmin && !isFinished(book))
+        card.append(
+          button(
+            "執筆を終了",
+            () => finishBook(book, () => load(true)),
+            "delete-book",
+          ),
         );
       list.append(card);
     }
@@ -240,6 +345,7 @@ function read(id) {
     button,
     isAdmin,
     deleteBook,
+    finishBook,
     storageGet,
     storageSet,
     storageRemove,

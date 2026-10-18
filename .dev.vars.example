@@ -3,3 +3,6 @@
 COOKIE_SECRET=
 # Unset/empty disables login. For local testing you may explicitly set 1234.
 ADMIN_PASSWORD=
+
+# Override the local unfinished-book cap if needed.
+# MAX_ACTIVE_NOVELS=30

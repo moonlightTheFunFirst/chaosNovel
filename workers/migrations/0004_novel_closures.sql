@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS novel_closures (
+ novel_id TEXT PRIMARY KEY REFERENCES novels(id) ON DELETE CASCADE,
+ closed_at TEXT NOT NULL
+);
