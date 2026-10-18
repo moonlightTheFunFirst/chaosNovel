@@ -1,3 +1,4 @@
+import { creationBlockReason } from "./creation-permission.js";
 import { isFinished, bookStatus, finishReason } from "./book-state.js";
 import { retryAfterMs } from "./sync.js";
 import { showRules } from "./rules.js";
@@ -203,6 +204,8 @@ async function shelf() {
   }
   creationAvailability("執筆中の冊数を確認しています。");
   actions.append(filter, sort, createControl);
+  if (savedJSON("new-book-pending"))
+    actions.append(button("前回の公開結果を確認", createForm));
   app.append(message);
   let books = [],
     generation = 0,
@@ -222,16 +225,11 @@ async function shelf() {
       if (ticket !== generation || !app.contains(more)) return;
       capacityChecked = true;
       const c = session.creation;
-      creationAvailability(
-        c.activeLimitReached
-          ? "これ以上本を作成できません。先に他の本の執筆を完了させてください。"
-          : "",
-      );
+      const reason = creationBlockReason(c);
+      creationAvailability(reason);
       capacityNote.textContent =
         `執筆中の本：${c.activeCount}／${c.maxActiveNovels}冊` +
-        (c.activeLimitReached
-          ? "。新しい本を公開するには、いずれかの本を完結させてください。下書きは書けます。"
-          : "");
+        (reason ? "。" + reason : "");
       const batch = await api(
         "/novels?" +
           new URLSearchParams({

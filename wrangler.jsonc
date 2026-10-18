@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "chaos-novel",
+  "account_id": "dbc9245da5cda5dbb571a880d6e957db",
   "main": "workers/index.js",
   "compatibility_date": "2026-10-18",
   "compatibility_flags": ["nodejs_compat"],
@@ -11,16 +12,16 @@
     "run_worker_first": ["/api/*", "/novels/*"],
   },
   "vars": {
-    "PUBLIC_ORIGIN": "https://replace-before-publishing.invalid",
+    "PUBLIC_ORIGIN": "https://chaos-novel.tazn.workers.dev",
     "COOKIE_SECURE": "1",
-    "MAX_ACTIVE_NOVELS": "30",
+    "MAX_ACTIVE_NOVELS": "10",
     "ENABLED_CAPACITIES": "4000,12000",
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "chaos-novel-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "236f2eab-1248-4ef1-aa3e-55b74ecbc931",
       "migrations_dir": "workers/migrations",
     },
   ],
