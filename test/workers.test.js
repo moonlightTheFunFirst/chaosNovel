@@ -666,3 +666,31 @@ test("D1 admin finish API preserves body and appears in completed shelf; posting
     0,
   );
 });
+
+test("D1 capacity policy preserves retries and existing long books", async (t) => {
+  const { db } = await fixture(t);
+  const { capacityCases } = await import("../test-support/capacities.js");
+  await capacityCases(
+    (capacities) => new D1Store(db, { capacities }),
+    async (table) =>
+      (await db.prepare("SELECT count(*) n FROM " + table).first()).n,
+    (id) =>
+      db.prepare("UPDATE novels SET count=39999 WHERE id=?").bind(id).run(),
+  );
+});
+test("Workers session and publish use admin cookie for capacity exemption", async (t) => {
+  const { mf } = await fixture(t),
+    c = client(mf);
+  assert.deepEqual(
+    (await (await c.call("/api/session")).json()).creation.capacities,
+    [4000, 12000],
+  );
+  const body = { ...payload(), capacity: 40000 };
+  assert.equal((await c.call("/api/novels", body)).status, 400);
+  await c.call("/api/admin", { password });
+  assert.deepEqual(
+    (await (await c.call("/api/session")).json()).creation.capacities,
+    [4000, 12000, 40000],
+  );
+  assert.equal((await c.call("/api/novels", body)).status, 200);
+});

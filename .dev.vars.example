@@ -6,3 +6,7 @@ ADMIN_PASSWORD=
 
 # Override the local unfinished-book cap if needed.
 # MAX_ACTIVE_NOVELS=30
+
+# Guest creation lengths; administrators can always create all three lengths.
+# Enable long novels: 4000,12000,40000. Existing books are unaffected.
+ENABLED_CAPACITIES=4000,12000

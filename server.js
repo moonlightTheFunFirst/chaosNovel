@@ -199,6 +199,7 @@ if (
   mkdirSync(dirname(path), { recursive: true });
   const store = new Store(path, {
     maxActiveNovels: process.env.MAX_ACTIVE_NOVELS ?? 30,
+    capacities: process.env.ENABLED_CAPACITIES,
   });
   const server = createApp(store);
   server.listen(

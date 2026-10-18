@@ -100,6 +100,7 @@ export default {
       }
       const store = new D1Store(env.DB, {
           maxActiveNovels: env.MAX_ACTIVE_NOVELS ?? 30,
+          capacities: env.ENABLED_CAPACITIES,
         }),
         identity = workerIdentity(store, env.COOKIE_SECRET, {
           password: env.ADMIN_PASSWORD,

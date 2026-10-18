@@ -1,3 +1,5 @@
+import { capacityNames } from "../capacities.js";
+import { restoreCapacity } from "./creation-capacity.js";
 import { formatDate } from "./book-meta.js";
 import { titleValidation } from "./title-validation.js";
 import { inspectInput } from "./text.js";
@@ -14,12 +16,13 @@ export function openCreation({
   let pending = savedJSON("new-book-pending");
   if (pending) saved = pending;
   app.innerHTML =
-    '<a class="back" href="/">← 本棚へ</a><section class="book-heading"><h1>物語に、名前と最初の一節を。</h1><p>公開するまで、本棚には追加されません。</p></section><form id="new-book-form"><label for="title">本のタイトル（1〜100字）</label><input id="title" required autocomplete="off" aria-describedby="title-error"><p id="title-error" class="title-error" role="status" aria-live="polite"></p><label for="length">一冊の長さ</label><select id="length"><option value="4000">短編 — 4,000字</option><option value="12000">中編 — 12,000字</option><option value="40000">長編 — 40,000字</option></select><p>既にある本と同じ名前は使えません（空白・英字の大小・全角半角・一部の不可視文字は区別しません）。タイトルと長さは公開後に変更できません。</p><button class="primary">最初の一節を書く</button></form>';
+    '<a class="back" href="/">← 本棚へ</a><section class="book-heading"><h1>物語に、名前と最初の一節を。</h1><p>公開するまで、本棚には追加されません。</p></section><form id="new-book-form"><label for="title">本のタイトル（1〜100字）</label><input id="title" required autocomplete="off" aria-describedby="title-error"><p id="title-error" class="title-error" role="status" aria-live="polite"></p><label for="length">一冊の長さ</label><select id="length"></select><p id="capacity-note" class="note" role="status"></p><p>既にある本と同じ名前は使えません（空白・英字の大小・全角半角・一部の不可視文字は区別しません）。タイトルと長さは公開後に変更できません。</p><button class="primary">最初の一節を書く</button></form>';
   const form = app.querySelector("form"),
     title = app.querySelector("#title"),
     length = app.querySelector("#length");
   title.value = saved.title || "";
-  length.value = String(saved.capacity || 4000);
+  let capacitiesReady = false;
+  const capacityNote = app.querySelector("#capacity-note");
   let text = saved.text || "",
     composing = false,
     sending = false;
@@ -28,7 +31,7 @@ export function openCreation({
   app.append(status);
   const snapshot = () => ({
     title: title.value,
-    capacity: Number(length.value),
+    capacity: capacitiesReady ? Number(length.value) : saved.capacity || 4000,
     text,
   });
   function save() {
@@ -70,6 +73,34 @@ export function openCreation({
     permission = null;
   function applyPermission(value) {
     permission = value;
+    if (value.capacities) {
+      const restored = restoreCapacity(
+        capacitiesReady ? snapshot() : saved,
+        pending,
+        value.capacities,
+      );
+      length.replaceChildren(
+        ...value.capacities.map((c) => {
+          const option = el(
+            "option",
+            capacityNames[c] + " — " + c.toLocaleString() + "字",
+          );
+          option.value = String(c);
+          return option;
+        }),
+      );
+      length.value = String(restored.draft.capacity);
+      capacitiesReady = true;
+      if (restored.message) {
+        pending = restored.pending;
+        storageRemove("new-book-pending");
+        capacityNote.textContent = restored.message;
+        form.hidden = false;
+        editor.hidden = true;
+        document.body.classList.remove("creation-writing");
+        save();
+      }
+    }
     allowedAt =
       performance.now() +
       (!value.nextCreationAt
@@ -111,6 +142,7 @@ export function openCreation({
     counter.textContent =
       input.count === null ? input.error : input.count + " / 400 字";
     check.disabled =
+      !capacitiesReady ||
       composing ||
       sending ||
       !!pending ||
@@ -118,7 +150,7 @@ export function openCreation({
       !!permission?.activeLimitReached ||
       !input.valid;
     retry.hidden = !pending;
-    retry.disabled = sending;
+    retry.disabled = sending || !capacitiesReady;
     title.disabled = length.disabled = draft.readOnly = !!pending || sending;
     back.disabled = sending;
     refresh.hidden =
@@ -154,7 +186,7 @@ export function openCreation({
   };
   form.onsubmit = (e) => {
     e.preventDefault();
-    if (!titleCheck.isValid() || next.disabled) return;
+    if (!capacitiesReady || !titleCheck.isValid() || next.disabled) return;
     if (!inspectInput(title.value, true).valid) {
       status.textContent = inspectInput(title.value, true).error;
       return;
@@ -218,6 +250,8 @@ export function openCreation({
       if (error.status && error.status < 500 && error.status !== 409) {
         pending = null;
         storageRemove("new-book-pending");
+        save();
+        await refreshPermission();
       }
     } finally {
       sending = false;

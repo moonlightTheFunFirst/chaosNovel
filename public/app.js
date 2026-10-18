@@ -142,7 +142,7 @@ function finishBook(book, onFinished = () => location.reload()) {
 async function shelf() {
   app.innerHTML =
     '<section class="hero"><div><div class="eyebrow">A STORY WITHOUT A PLAN</div><h1><span>一度きりの</span><span>一節を。</span><br><span>予想できない</span><span>一冊に。</span></h1><p>知らない誰かの続きに、あなたの言葉を。<br>結末も、つながりも、気にしなくていい。</p></div><div class="hero-mark">見た目は小説。<br>中身は、カオス。</div></section><div class="toolbar"><h2>みんなの本棚</h2><div class="actions" id="shelf-actions"></div></div><div class="shelf" id="shelf"></div>';
-  showRules(app, el, isAdmin);
+  showRules(app, el, isAdmin, api);
   const capacityNote = el("p", "執筆中の冊数を確認しています…", "note");
   document.querySelector(".toolbar").after(capacityNote);
   const actions = document.querySelector("#shelf-actions");

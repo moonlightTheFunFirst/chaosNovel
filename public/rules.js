@@ -1,4 +1,4 @@
-export function showRules(app, el, isAdmin) {
+export function showRules(app, el, isAdmin, api) {
   const section = el("section", undefined, "intro-rules");
   section.setAttribute("aria-labelledby", "rules-heading");
   const heading = el("h2", "カオス小説とは");
@@ -60,6 +60,15 @@ export function showRules(app, el, isAdmin) {
     list.append(li);
   });
   section.append(list);
+  api("/session")
+    .then((session) => {
+      if (
+        session.creation.capacities &&
+        !session.creation.capacities.includes(40000)
+      )
+        intro.append(el("p", "長編は現在、新しくつくれません。", "note"));
+    })
+    .catch(() => {});
   if (isAdmin)
     intro.append(
       el(

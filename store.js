@@ -1,3 +1,8 @@
+import {
+  enabledCapacities,
+  checkCreationCapacity,
+  creationCapacities,
+} from "./capacities.js";
 import { activeNovelLimit, activeLimitMessage } from "./active-novels.js";
 import { AppError } from "./app-error.js";
 import { migrateTitleKeys } from "./migrations/title-keys.js";
@@ -14,8 +19,9 @@ import {
 
 export { AppError } from "./app-error.js";
 export class Store {
-  constructor(path, { now = Date.now, maxActiveNovels = 30 } = {}) {
+  constructor(path, { now = Date.now, maxActiveNovels = 30, capacities } = {}) {
     this.now = now;
+    this.capacities = enabledCapacities(capacities);
     this.maxActiveNovels = activeNovelLimit(maxActiveNovels);
     this.db = new DatabaseSync(path);
     const version = this.db.prepare("PRAGMA user_version").get().user_version;
@@ -53,6 +59,7 @@ export class Store {
       .get().n;
     const activeLimitReached = activeCount >= this.maxActiveNovels;
     return {
+      capacities: creationCapacities(this.capacities, isAdmin),
       activeCount,
       maxActiveNovels: this.maxActiveNovels,
       activeLimitReached,
@@ -89,6 +96,7 @@ export class Store {
         this.db.exec("COMMIT");
         return { id: prior.novel_id };
       }
+      checkCreationCapacity(capacity, this.capacities, isAdmin);
       const permission = this.creationStatus(participant, isAdmin);
       if (!permission.canCreate) {
         const error = new AppError(

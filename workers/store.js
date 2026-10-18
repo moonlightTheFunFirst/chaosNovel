@@ -1,3 +1,8 @@
+import {
+  enabledCapacities,
+  checkCreationCapacity,
+  creationCapacities,
+} from "../capacities.js";
 import { activeNovelLimit, activeLimitMessage } from "../active-novels.js";
 import { Buffer } from "node:buffer";
 import { AppError } from "../app-error.js";
@@ -16,9 +21,10 @@ function manuscript(key, text) {
   return normalize(text);
 }
 export class D1Store {
-  constructor(db, { now = Date.now, maxActiveNovels = 30 } = {}) {
+  constructor(db, { now = Date.now, maxActiveNovels = 30, capacities } = {}) {
     this.db = db;
     this.now = now;
+    this.capacities = enabledCapacities(capacities);
     this.maxActiveNovels = activeNovelLimit(maxActiveNovels);
   }
   sql(query, ...args) {
@@ -38,6 +44,7 @@ export class D1Store {
     ).n;
     const activeLimitReached = activeCount >= this.maxActiveNovels;
     return {
+      capacities: creationCapacities(this.capacities, admin),
       activeCount,
       maxActiveNovels: this.maxActiveNovels,
       activeLimitReached,
@@ -202,6 +209,7 @@ export class D1Store {
           throw new AppError("この本は削除されました。", 404);
         return { id: prior.novel_id };
       }
+      checkCreationCapacity(capacity, this.capacities, admin);
       const permission = await this.creationStatus(p, admin);
       if (!permission.canCreate) {
         const e = new AppError(
